@@ -14,6 +14,8 @@
 **Client UI:** Mobile App with 5 pages: **Calendar, Chats, Discover, Preferences,Profile**  
 **External systems (fixed scope):** **Google Calendar API**,OPTIONAL: **Google Maps API**  
 **Data layer:** relational database with the provided tables.
+  
+## $\color{purple}{\text{ARCHITECTURE}}$
 
 ### Client–Server
 single backend deployment
@@ -93,7 +95,10 @@ single backend deployment
 - OPTIONAL: Google Maps API (place lookup/details to populate Locations)
 
 
-#### **TECH STACK**:
+<img width="1336" height="826" alt="model png" src="https://github.com/user-attachments/assets/3b492684-5abe-4350-9e6c-5f90f84890a9" />
+
+
+## $\color{purple}{\text{TECH STACK:}}$
 
 **FRONTEND**:
 
