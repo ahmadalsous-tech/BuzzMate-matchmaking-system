@@ -85,7 +85,7 @@ single backend deployment
 
 - Tables:
     
-    - Users, Preferences, Interactions, Matches, Conversations, Messages, Reports, Blocks, Suggested_Dates, Locations
+    - `Users`, `Preferences`, `Interactions`, `Matches`, `Conversations`, `Messages`, `Reports`, `Blocks`, `Suggested_Dates`, `Locations`
         
 
 #### External Systems
