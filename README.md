@@ -128,3 +128,9 @@ From the project root (c:....\BuzzMate):
 `npm run start:dev`
 
 Visit `http://localhost:3000`
+
+For git/github:
+-    `git init`
+-	`git remote add origin https://github.com/ahmadalsous-tech/BuzzMate-matchmaking-system.git`
+-	`git pull origin main --allow-unrelated-histories`
+-	
