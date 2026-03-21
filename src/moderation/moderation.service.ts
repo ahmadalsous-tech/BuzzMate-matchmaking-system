@@ -83,10 +83,10 @@ export class ModerationService {
         this.discoverService.invalidate(reportedId);
       }
 
-      await this.usersService.update(reportedId, {
+      await this.usersService.updateInternal(reportedId, {
         accountStatus: newStatus,
         reportCount: reported.reportCount,
-      } as any);
+      });
 
       
     }
@@ -94,4 +94,3 @@ export class ModerationService {
     return report;
   }
 }
-

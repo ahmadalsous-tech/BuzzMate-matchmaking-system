@@ -35,5 +35,9 @@ export class CreateUserDto {
   @IsOptional()
   @IsString()
   profilePicUrl?: string;
+
+  @IsOptional()
+  @IsEnum(['public', 'private'])
+  privacySetting?: 'public' | 'private';
 }
 

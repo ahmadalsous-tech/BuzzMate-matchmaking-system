@@ -31,6 +31,12 @@ export class SuggestedDate {
   })
   status!: 'suggested' | 'accepted_by_user_1' | 'accepted_by_user_2' | 'accepted_by_both';
 
+  @Column({ name: 'scheduled_start', type: 'datetime', nullable: true })
+  scheduledStart?: Date;
+
+  @Column({ name: 'scheduled_end', type: 'datetime', nullable: true })
+  scheduledEnd?: Date;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;
 

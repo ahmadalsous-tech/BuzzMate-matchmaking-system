@@ -16,7 +16,7 @@ export class MessagingService {
     @InjectRepository(Block)
     private readonly blockRepo: Repository<Block>,
     private readonly usersService: UsersService,
-  ) {}
+  ) { }
 
   async getConversation(conversationId: number): Promise<Conversation> {
     const convo = await this.convoRepo.findOne({
@@ -71,6 +71,16 @@ export class MessagingService {
       where: { conversationId },
       order: { createdAt: 'ASC' },
     });
+  }
+  async getConversationsForUser(userId: number): Promise<Conversation[]> {
+    return this.convoRepo
+      .createQueryBuilder('c')
+      .innerJoinAndSelect('c.match', 'm')
+      .innerJoinAndSelect('m.user1', 'u1')
+      .innerJoinAndSelect('m.user2', 'u2')
+      .where('m.user_1_id = :userId OR m.user_2_id = :userId', { userId })
+      .orderBy('c.conversation_id', 'DESC')
+      .getMany();
   }
 }
 

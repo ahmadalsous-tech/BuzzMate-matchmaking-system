@@ -113,70 +113,87 @@ def create_date_event(
         sendUpdates="all",
     ).execute()
 
-def build_credentials(refresh_token, credentials_path):
-    with open(credentials_path, 'r') as f:
-        client_info = json.load(f)
-    if 'installed' in client_info:
-        info = client_info['installed']
-    else:
-        info = client_info['web']
 
+def build_credentials(refresh_token, client_id, client_secret, token_uri):
     return Credentials(
         token=None,
         refresh_token=refresh_token,
-        token_uri=info['token_uri'],
-        client_id=info['client_id'],
-        client_secret=info['client_secret']
+        token_uri=token_uri,
+        client_id=client_id,
+        client_secret=client_secret
     )
 
 def main():
-    if len(sys.argv) != 6:
-        print(json.dumps({"error": "Usage: calendar_script.py <creds_path> <user1_email> <user1_refresh> <user2_email> <user2_refresh>"}))
+    if len(sys.argv) < 2:
+        print(json.dumps({"error": "Usage: calendar_script.py <mode> [start_time] [end_time]"}))
         sys.exit(1)
 
-    credentials_path = sys.argv[1]
-    u1_email = sys.argv[2]
-    u1_refresh = sys.argv[3]
-    u2_email = sys.argv[4]
-    u2_refresh = sys.argv[5]
+    mode = sys.argv[1]
+    client_id = os.environ.get('GOOGLE_CLIENT_ID')
+    client_secret = os.environ.get('GOOGLE_CLIENT_SECRET')
+    token_uri = os.environ.get('GOOGLE_TOKEN_URI', 'https://oauth2.googleapis.com/token')
+    u1_email = os.environ.get('U1_EMAIL')
+    u1_refresh = os.environ.get('U1_REFRESH')
+    u2_email = os.environ.get('U2_EMAIL')
+    u2_refresh = os.environ.get('U2_REFRESH')
+
+    if not all([client_id, client_secret, u1_email, u1_refresh]):
+        print(json.dumps({"error": "Missing essential environment variables"}))
+        sys.exit(1)
 
     try:
-        creds1 = build_credentials(u1_refresh, credentials_path)
-        creds2 = build_credentials(u2_refresh, credentials_path)
-
+        creds1 = build_credentials(u1_refresh, client_id, client_secret, token_uri)
         service1 = build("calendar", "v3", credentials=creds1)
-        service2 = build("calendar", "v3", credentials=creds2)
 
-        now = datetime.now(TZ)
-        search_start = now
-        search_end = datetime.combine((now + timedelta(days=SEARCH_DAYS)).date(), BUSINESS_END, tzinfo=TZ)
+        if mode == "suggest":
+            creds2 = build_credentials(u2_refresh, client_id, client_secret, token_uri)
+            service2 = build("calendar", "v3", credentials=creds2)
 
-        busy1 = get_busy_blocks(service1, "primary", search_start, search_end)
-        busy2 = get_busy_blocks(service2, "primary", search_start, search_end)
+            now = datetime.now(TZ)
+            search_start = now
+            search_end = datetime.combine((now + timedelta(days=SEARCH_DAYS)).date(), BUSINESS_END, tzinfo=TZ)
 
-        slot = find_first_common_slot(busy1, busy2, search_start, search_end, duration_minutes=MEETING_MINUTES)
-        if slot is None:
-            print(json.dumps({"error": "No common slots found"}))
-            sys.exit(0)
+            busy1 = get_busy_blocks(service1, "primary", search_start, search_end)
+            busy2 = get_busy_blocks(service2, "primary", search_start, search_end)
 
-        start_dt, end_dt = slot
-        
-        # User 1 acts as the organizer creating the event inviting User 2
-        event_result = create_date_event(
-            organizer_service=service1,
-            organizer_calendar_id="primary",
-            start_dt=start_dt,
-            end_dt=end_dt,
-            user1_email=u1_email,
-            user2_email=u2_email,
-        )
+            slot = find_first_common_slot(busy1, busy2, search_start, search_end, duration_minutes=MEETING_MINUTES)
+            if slot is None:
+                print(json.dumps({"error": "No common slots found"}))
+                sys.exit(0)
 
-        print(json.dumps({
-            "status": "success", 
-            "start": start_dt.isoformat(), 
-            "end": end_dt.isoformat(),
-            "eventLink": event_result.get('htmlLink')
-        }))
+            start_dt, end_dt = slot
+            
+            print(json.dumps({
+                "status": "success", 
+                "start": start_dt.isoformat(), 
+                "end": end_dt.isoformat()
+            }))
+            
+        elif mode == "book":
+            if len(sys.argv) < 4:
+                print(json.dumps({"error": "Missing start_time and end_time for book mode."}))
+                sys.exit(1)
+                
+            start_dt = parse_rfc3339(sys.argv[2])
+            end_dt = parse_rfc3339(sys.argv[3])
+
+            # User 1 acts as the organizer creating the event inviting User 2
+            event_result = create_date_event(
+                organizer_service=service1,
+                organizer_calendar_id="primary",
+                start_dt=start_dt,
+                end_dt=end_dt,
+                user1_email=u1_email,
+                user2_email=u2_email,
+            )
+
+            print(json.dumps({
+                "status": "success", 
+                "eventLink": event_result.get('htmlLink')
+            }))
+        else:
+            print(json.dumps({"error": f"Unknown mode: {mode}"}))
+            sys.exit(1)
 
     except HttpError as error:
         print(json.dumps({"error": f"HttpError: {error}"}))

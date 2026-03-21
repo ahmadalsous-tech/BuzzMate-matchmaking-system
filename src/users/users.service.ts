@@ -33,6 +33,7 @@ export class UsersService {
       address: dto.address,
       phoneNumber: dto.phoneNumber,
       profilePicUrl: dto.profilePicUrl,
+      privacySetting: dto.privacySetting,
     });
 
     return this.usersRepo.save(user);
@@ -46,12 +47,32 @@ export class UsersService {
     return user;
   }
 
+  async login(email: string): Promise<User> {
+    const user = await this.usersRepo.findOne({ where: { email } });
+    if (!user) {
+      throw new NotFoundException('User not found. Please sign up first.');
+    }
+    if (user.accountStatus === 'banned') {
+      throw new ForbiddenException('Account is banned');
+    }
+    return user;
+  }
+
   async update(userId: number, dto: UpdateUserDto): Promise<User> {
     const user = await this.findOne(userId);
     if (user.accountStatus === 'banned') {
       throw new ForbiddenException('Account is banned');
     }
-    Object.assign(user, dto);
+    // Strip sensitive fields that should not be user-settable
+    const { accountStatus, reportCount, ...safeDto } = dto as any;
+    Object.assign(user, safeDto);
+    return this.usersRepo.save(user);
+  }
+
+  /** Internal method for system operations (e.g. banning). Bypasses DTO restrictions. */
+  async updateInternal(userId: number, data: Partial<User>): Promise<User> {
+    const user = await this.findOne(userId);
+    Object.assign(user, data);
     return this.usersRepo.save(user);
   }
 
@@ -96,4 +117,3 @@ export class UsersService {
     });
   }
 }
-

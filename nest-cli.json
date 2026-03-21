@@ -6,25 +6,9 @@
     "deleteOutDir": true,
     "assets": [
       {
-        "include": "PythonBackend/**/*",
-        "outDir": "dist"
-      }
-    ]
-  }
-}
-
-{
-  "collection": "@nestjs/schematics",
-  "sourceRoot": "src",
-  "compilerOptions": {
-    "assets": [
-      {
-        "include": "PythonBackend/**/*.json",
-        "watchAssets": true
-      },
-      {
         "include": "PythonBackend/**/*.py",
-        "watchAssets": true
+        "watchAssets": true,
+        "outDir": "dist"
       }
     ]
   }

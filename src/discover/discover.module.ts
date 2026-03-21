@@ -8,12 +8,13 @@ import { Preference } from '../preferences/preference.entity';
 import { DiscoverCron } from './discover.cron';
 
 import { User } from '../users/user.entity';
+import { Interaction } from '../interactions/interaction.entity';
+import { Block } from '../moderation/block.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([DiscoverSuggestion, Preference, User]), UsersModule],
+  imports: [TypeOrmModule.forFeature([DiscoverSuggestion, Preference, User, Interaction, Block]), UsersModule],
   providers: [DiscoverService, DiscoverCron],
   controllers: [DiscoverController],
   exports: [DiscoverService],
 })
 export class DiscoverModule {}
-

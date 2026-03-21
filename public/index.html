@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
+  <link rel="icon" type="image/x-icon" href="/assets/favicon.ico">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BuzzMate</title>
@@ -8,28 +10,56 @@
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
+
 <body>
 
-  <!-- SIGNUP PAGE (Overlay) -->
-  <section id="page-signup" class="page active">
+  <!-- LANDING PAGE -->
+  <section id="page-landing" class="page active" style="justify-content: center; text-align: center; background: radial-gradient(circle at center, var(--bg-cream) 0%, #FFF0D4 100%);">
+    <div style="margin-bottom: 2rem;">
+      <i class="fa-solid fa-brands fa-forumbee" style="font-size: 5rem; color: var(--accent-amber); margin-bottom: 1rem;"></i>
+      <h1 style="font-size: 4rem; color: var(--accent-amber); font-weight: 800; text-shadow: 2px 2px 0px rgba(0,0,0,0.05);">BuzzMate</h1>
+      <p style="color: var(--muted-brown); font-size: 1.2rem; margin-top: 10px;">Find your perfect match in the hive.</p>
+    </div>
+    <div style="display: flex; gap: 20px; flex-direction: column; width: 100%; max-width: 300px;">
+      <button class="btn btn-primary" onclick="openAuthOverlay('signup')" style="font-size: 1.1rem; padding: 18px;">Sign Up</button>
+      <button class="btn btn-unlike" onclick="openAuthOverlay('login')" style="font-size: 1.1rem; padding: 18px; border: 2px solid var(--accent-amber); background: transparent; color: var(--text-dark);">Log In</button>
+    </div>
+  </section>
+
+  <!-- AUTH OVERLAY (Signup / Login) -->
+  <section id="page-signup" class="page hidden" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--bg-cream); z-index: 9999; justify-content: center; align-items: center; padding: 20px;">
     <div class="signup-container">
+      <button onclick="closeAuthOverlay()" style="position: absolute; top: 20px; right: 20px; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--muted-brown);"><i class="fa fa-times"></i></button>
       <div class="logo">BuzzMate</div>
-      <h2 style="margin-bottom: 30px;">Create your profile</h2>
-      
-      <form id="auth-form" onsubmit="event.preventDefault(); registerUser();">
+      <div class="auth-tabs" style="display: flex; gap: 10px; margin-bottom: 20px;">
+        <button id="tab-signup" class="btn active-tab" onclick="switchAuthTab('signup')" style="flex: 1; border-radius: 8px; background: var(--accent-amber); font-weight: bold; padding: 10px; border: none; cursor: pointer;">Sign Up</button>
+        <button id="tab-login" class="btn inactive-tab" onclick="switchAuthTab('login')" style="flex: 1; border-radius: 8px; background: transparent; color: var(--muted-brown); font-weight: bold; padding: 10px; border: none; cursor: pointer;">Log In</button>
+      </div>
+
+      <form id="auth-form" onsubmit="event.preventDefault(); submitAuth();">
         <div class="form-group">
           <label>Email Address</label>
           <input type="email" id="auth-email" placeholder="hello@example.com" required>
         </div>
-        <div class="form-group">
-          <label>Full Name</label>
-          <input type="text" id="auth-name" placeholder="e.g. John Doe">
+        <div id="signup-fields">
+          <div class="form-group">
+            <label>Full Name</label>
+            <input type="text" id="auth-name" placeholder="e.g. John Doe">
+          </div>
+          <div class="form-group">
+            <label>Gender</label>
+            <select id="auth-gender">
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Age</label>
+            <input type="number" id="auth-age" placeholder="Min. 18" min="18">
+          </div>
         </div>
-        <div class="form-group">
-          <label>Age</label>
-          <input type="number" id="auth-age" placeholder="Min. 18" min="18">
-        </div>
-        <button type="submit" class="btn btn-primary">Start Matching</button>
+        <button type="submit" id="auth-submit-btn" class="btn btn-primary" style="margin-top: 10px;">Start Matching</button>
       </form>
     </div>
   </section>
@@ -40,7 +70,7 @@
       <img src="https://i.pravatar.cc/150?u=me" alt="My Profile" class="profile-img" id="sidebar-img">
       <h2 id="sidebar-name">New Bee, 24</h2>
       <p id="sidebar-occ">Just joined</p>
-      
+
       <div style="text-align: left; width: 100%;">
         <small style="text-transform: uppercase; letter-spacing: 1px; color: var(--muted-brown);">Bio</small>
         <p id="sidebar-bio" style="margin-top: 5px; color: var(--text-dark);">Passionate about finding my match!</p>
@@ -53,7 +83,7 @@
     </aside>
 
     <main class="main-content">
-      
+
       <!-- DISCOVER -->
       <section id="page-discover" class="page">
         <div class="header-section">
@@ -67,11 +97,13 @@
             <div class="match-details">
               <h3>Sarah, 26</h3>
               <p>Interior Designer • 3 miles away</p>
-              <p style="margin-top: 8px; font-style: italic; color: var(--text-dark);">"Passionate about finding my match!"</p>
+              <p style="margin-top: 8px; font-style: italic; color: var(--text-dark);">"Passionate about finding my
+                match!"</p>
             </div>
             <div class="match-actions">
               <button class="btn btn-unlike" data-action="dislike"><i class="fa fa-times"></i></button>
-              <button class="btn btn-buzz" data-action="like"><i class="fa-solid fa-brands fa-forumbee"></i> Buzz</button>
+              <button class="btn btn-buzz" data-action="like"><i class="fa-solid fa-brands fa-forumbee"></i>
+                Buzz</button>
             </div>
           </div>
         </div>
@@ -106,114 +138,120 @@
       <!-- PREFERENCES -->
       <section id="page-preferences" class="page">
         <div class="header-section">
-            <h1 style="font-size: 2rem;">Preferences</h1>
-            <p style="color: var(--muted-brown);">Customize your hive radar.</p>
+          <h1 style="font-size: 2rem;">Preferences</h1>
+          <p style="color: var(--muted-brown);">Customize your hive radar.</p>
         </div>
-        <form id="preferences-form" class="form-container" style="background: white; padding: 30px; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid var(--border);">
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Min Age</label>
-                    <input type="number" id="minAge" min="18" max="120" value="24" />
-                </div>
-                <div class="form-group">
-                    <label>Max Age</label>
-                    <input type="number" id="maxAge" min="18" max="120" value="34" />
-                </div>
+        <form id="preferences-form" class="form-container"
+          style="background: white; padding: 30px; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid var(--border);">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Min Age</label>
+              <input type="number" id="minAge" min="18" max="120" value="24" />
             </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Max distance (miles)</label>
-                    <input type="number" id="maxDistance" min="1" max="500" value="25" />
-                </div>
-                <div class="form-group">
-                    <label>Preferred gender</label>
-                    <select id="preferredGender">
-                        <option value="any">Anyone</option>
-                        <option value="female">Women</option>
-                        <option value="male">Men</option>
-                        <option value="other">Other</option>
-                    </select>
-                </div>
+            <div class="form-group">
+              <label>Max Age</label>
+              <input type="number" id="maxAge" min="18" max="120" value="34" />
             </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Date mood</label>
-                    <select id="dateMood">
-                        <option value="unsure">Surprise me</option>
-                        <option value="casual">Casual</option>
-                        <option value="romantic">Romantic</option>
-                        <option value="adventurous">Adventurous</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Max price tier</label>
-                    <input type="number" id="maxPriceTier" min="1" max="5" value="3" />
-                </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Max distance (miles)</label>
+              <input type="number" id="maxDistance" min="1" max="500" value="25" />
             </div>
-            <div class="form-group" style="width: 100%;">
-                <label>Hobbies / Vibe</label>
-                <div style="display: flex; flex-wrap: wrap; gap: 10px;" id="hobbies-container">
-                    <label><input type="checkbox" value="handcrafts"> Handcrafts</label>
-                    <label><input type="checkbox" value="sports"> Sports</label>
-                    <label><input type="checkbox" value="art"> Art</label>
-                    <label><input type="checkbox" value="music"> Music</label>
-                    <label><input type="checkbox" value="gaming"> Gaming</label>
-                    <label><input type="checkbox" value="travel"> Travel</label>
-                    <label><input type="checkbox" value="food"> Food</label>
-                    <label><input type="checkbox" value="movies"> Movies</label>
-                    <label><input type="checkbox" value="reading"> Reading</label>
-                    <label><input type="checkbox" value="photography"> Photography</label>
-                </div>
+            <div class="form-group">
+              <label>Preferred gender</label>
+              <select id="preferredGender">
+                <option value="any">Anyone</option>
+                <option value="female">Women</option>
+                <option value="male">Men</option>
+                <option value="other">Other</option>
+              </select>
             </div>
-            <button type="button" class="btn btn-primary" id="btn-save-preferences" onclick="savePreferences()">Save Preferences</button>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Date mood</label>
+              <select id="dateMood">
+                <option value="unsure">Surprise me</option>
+                <option value="casual">Casual</option>
+                <option value="romantic">Romantic</option>
+                <option value="adventurous">Adventurous</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Max price tier</label>
+              <input type="number" id="maxPriceTier" min="1" max="5" value="3" />
+            </div>
+          </div>
+          <div class="form-group" style="width: 100%;">
+            <label>Hobbies / Vibe</label>
+            <div style="display: flex; flex-wrap: wrap; gap: 10px;" id="hobbies-container">
+              <label><input type="checkbox" value="handcrafts"> Handcrafts</label>
+              <label><input type="checkbox" value="sports"> Sports</label>
+              <label><input type="checkbox" value="art"> Art</label>
+              <label><input type="checkbox" value="music"> Music</label>
+              <label><input type="checkbox" value="gaming"> Gaming</label>
+              <label><input type="checkbox" value="travel"> Travel</label>
+              <label><input type="checkbox" value="food"> Food</label>
+              <label><input type="checkbox" value="movies"> Movies</label>
+              <label><input type="checkbox" value="reading"> Reading</label>
+              <label><input type="checkbox" value="photography"> Photography</label>
+            </div>
+          </div>
+          <button type="button" class="btn btn-primary" id="btn-save-preferences" onclick="savePreferences()">Save
+            Preferences</button>
         </form>
       </section>
 
       <!-- PROFILE -->
       <section id="page-profile" class="page">
         <div class="header-section">
-            <h1 style="font-size: 2rem;">Edit Profile</h1>
-            <p style="color: var(--muted-brown);">Update your personal information.</p>
+          <h1 style="font-size: 2rem;">Edit Profile</h1>
+          <p style="color: var(--muted-brown);">Update your personal information.</p>
         </div>
-        <form id="profile-form" class="form-container" style="background: white; padding: 30px; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid var(--border);">
+        <form id="profile-form" class="form-container"
+          style="background: white; padding: 30px; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid var(--border);">
+          <div class="form-group">
+            <label>Name</label>
+            <input type="text" id="name" placeholder="Your name" value="New Bee" />
+          </div>
+          <div class="form-group">
+            <label>Email</label>
+            <input type="email" id="email" placeholder="you@example.com" />
+          </div>
+          <div class="form-row">
             <div class="form-group">
-                <label>Name</label>
-                <input type="text" id="name" placeholder="Your name" value="New Bee"/>
-            </div>
-            <div class="form-group">
-                <label>Email</label>
-                <input type="email" id="email" placeholder="you@example.com" />
-            </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Age</label>
-                    <input type="number" id="age" min="18" max="120" value="24"/>
-                </div>
-                <div class="form-group">
-                    <label>Dating preference</label>
-                    <select id="datingPreference">
-                        <option value="unsure">Unsure</option>
-                        <option value="casual">Casual</option>
-                        <option value="long term">Long term</option>
-                    </select>
-                </div>
+              <label>Age</label>
+              <input type="number" id="age" min="18" max="120" value="24" />
             </div>
             <div class="form-group">
-                <label>Occupation</label>
-                <input type="text" id="occupation" placeholder="What do you do?" />
+              <label>Dating preference</label>
+              <select id="datingPreference">
+                <option value="unsure">Unsure</option>
+                <option value="casual">Casual</option>
+                <option value="long term">Long term</option>
+              </select>
             </div>
-            <div class="form-group" style="width: 100%;">
-                <label>Bio / Opener</label>
-                <textarea id="opener" rows="3" placeholder="A catchy bio to show on your discover card"></textarea>
-            </div>
-            <div class="form-group" style="width: 100%;">
-                <label>Profile Picture</label>
-                <input type="file" id="profilePicInput" accept="image/*" onchange="uploadProfilePic()" />
-            </div>
-            <div class="form-group" style="width: 100%;">
-                <button type="button" class="btn btn-buzz" onclick="connectGoogleCalendar()"><i class="fa fa-google"></i> Connect Google Calendar</button>
-            </div>
-            <button type="button" class="btn btn-primary" id="btn-save-profile" onclick="saveProfile()">Save Profile</button>
+          </div>
+          <div class="form-group">
+            <label>Occupation</label>
+            <input type="text" id="occupation" placeholder="What do you do?" />
+          </div>
+          <div class="form-group" style="width: 100%;">
+            <label>Bio / Opener</label>
+            <textarea id="opener" rows="3" placeholder="A catchy bio to show on your discover card"></textarea>
+          </div>
+          <div class="form-group" style="width: 100%;">
+            <label>Profile Picture</label>
+            <input type="file" id="profilePicInput" accept="image/*" onchange="uploadProfilePic()" />
+          </div>
+          <div class="form-group" style="width: 100%;">
+            <button type="button" class="btn btn-buzz" onclick="connectGoogleCalendar()"><i class="fa fa-google"></i>
+              Connect Google Calendar</button>
+          </div>
+          <button type="button" class="btn btn-primary" id="btn-save-profile" onclick="saveProfile()">Save
+            Profile</button>
+          <button type="button" class="btn btn-unlike" onclick="logoutUser()" style="margin-top: 10px; width: 100%;">Log Out</button>
         </form>
       </section>
 
@@ -232,4 +270,5 @@
 
   <script src="app.js"></script>
 </body>
+
 </html>

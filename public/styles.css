@@ -210,8 +210,14 @@ body {
   width: 100%;
   max-width: 450px;
   text-align: center;
+  position: relative;
 }
-.logo { color: var(--accent-amber); font-size: 2rem; font-weight: 800; margin-bottom: 10px; }
+.logo { color: var(--accent-amber); font-size: 2.2rem; font-weight: 800; margin-bottom: 10px; }
+
+/* Auth Tabs */
+.active-tab { background: var(--accent-amber) !important; color: var(--text-dark) !important; }
+.inactive-tab { background: transparent !important; color: var(--muted-brown) !important; }
+.inactive-tab:hover { background: #FCFAF7 !important; }
 
 /* Utilities */
 .hidden { display: none !important; }

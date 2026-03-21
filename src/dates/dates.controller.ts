@@ -1,18 +1,32 @@
-import { Controller, Param, ParseIntPipe, Post, Body } from '@nestjs/common';
+import { Controller, Get, Param, ParseIntPipe, Post, Body } from '@nestjs/common';
 import { DatesService } from './dates.service';
 
 @Controller('dates')
 export class DatesController {
-  constructor(private readonly datesService: DatesService) {}
+  constructor(private readonly datesService: DatesService) { }
+  @Get('user/:userId')
+  getDatesForUser(@Param('userId', ParseIntPipe) userId: number) {
+    return this.datesService.getDatesForUser(userId);
+  }
 
   @Post(':suggestionId/accept')
   acceptDate(
     @Param('suggestionId', ParseIntPipe) suggestionId: number,
-    @Body('userId') userId: number, // In a real app this would come from an auth guard
+    @Body('userId') userId: number,
   ) {
     if (!userId) {
       throw new Error('userId is required in the body');
     }
     return this.datesService.acceptDate(suggestionId, userId);
+  }
+  @Post(':suggestionId/reject')
+  rejectDate(
+    @Param('suggestionId', ParseIntPipe) suggestionId: number,
+    @Body('userId') userId: number,
+  ) {
+    if (!userId) {
+      throw new Error('userId is required in the body');
+    }
+    return this.datesService.rejectDate(suggestionId, userId);
   }
 }

@@ -6,6 +6,8 @@ import { DiscoverSuggestion } from './discover-suggestion.entity';
 import { UsersService } from '../users/users.service';
 import { Preference } from '../preferences/preference.entity';
 import { User } from '../users/user.entity';
+import { Interaction } from '../interactions/interaction.entity';
+import { Block } from '../moderation/block.entity';
 
 @Injectable()
 export class DiscoverService {
@@ -22,6 +24,10 @@ export class DiscoverService {
     private readonly prefRepo: Repository<Preference>,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
+    @InjectRepository(Interaction)
+    private readonly interactionRepo: Repository<Interaction>,
+    @InjectRepository(Block)
+    private readonly blockRepo: Repository<Block>,
   ) {}
 
   async getSuggestionsForUser(userId: number): Promise<DiscoverSuggestion | null> {
@@ -87,6 +93,30 @@ export class DiscoverService {
       qb.andWhere('u.gender = :gender', { gender: pref.preferredGender });
     }
 
+    // Exclude users already interacted with (liked/disliked)
+    const interactedSub = this.interactionRepo
+      .createQueryBuilder('i')
+      .select('i.receiver_id')
+      .where('i.sender_id = :userId', { userId });
+    qb.andWhere(`u.user_id NOT IN (${interactedSub.getQuery()})`);
+
+    // Exclude users who blocked the current user or that the current user blocked
+    const blockedBySub = this.blockRepo
+      .createQueryBuilder('b1')
+      .select('b1.blocker_id')
+      .where('b1.blocked_id = :userId', { userId });
+    qb.andWhere(`u.user_id NOT IN (${blockedBySub.getQuery()})`);
+
+    const blockedSub = this.blockRepo
+      .createQueryBuilder('b2')
+      .select('b2.blocked_id')
+      .where('b2.blocker_id = :userId', { userId });
+    qb.andWhere(`u.user_id NOT IN (${blockedSub.getQuery()})`);
+
+    qb.setParameters(interactedSub.getParameters());
+    qb.setParameters(blockedBySub.getParameters());
+    qb.setParameters(blockedSub.getParameters());
+
     qb.limit(30);
 
     const candidates = await qb.getMany();
@@ -122,5 +152,3 @@ export class DiscoverService {
     this.cache.delete(userId);
   }
 }
-
-

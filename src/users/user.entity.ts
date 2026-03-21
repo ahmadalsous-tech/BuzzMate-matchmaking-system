@@ -4,6 +4,7 @@ import {
   Entity,
   Index,
   OneToMany,
+  OneToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { Preference } from '../preferences/preference.entity';
@@ -84,8 +85,8 @@ export class User {
   @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;
 
-  @OneToMany(() => Preference, (p) => p.user)
-  preferences?: Preference[];
+  @OneToOne(() => Preference, (p) => p.user)
+  preferences?: Preference;
 
   @OneToMany(() => Interaction, (i) => i.sender)
   sentInteractions?: Interaction[];
@@ -114,4 +115,3 @@ export class User {
   @OneToMany(() => Message, (m) => m.sender)
   messages?: Message[];
 }
-

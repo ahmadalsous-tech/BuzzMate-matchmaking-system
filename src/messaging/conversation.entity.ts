@@ -1,6 +1,5 @@
 import {
   Column,
-  CreateDateColumn,
   Entity,
   JoinColumn,
   OneToMany,
@@ -21,13 +20,9 @@ export class Conversation {
   @JoinColumn({ name: 'match_id' })
   match!: Match;
 
-  @CreateDateColumn({ name: 'created_at' })
-  createdAt!: Date;
-
   @Column({ name: 'last_message_preview', type: 'text', nullable: true })
   lastMessagePreview?: string;
 
   @OneToMany(() => Message, (m) => m.conversation)
   messages?: Message[];
 }
-

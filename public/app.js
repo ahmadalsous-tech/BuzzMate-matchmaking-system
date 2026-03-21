@@ -4,17 +4,29 @@ const API_BASE = 'http://localhost:3000';
 
 // Initialize session if exists
 if (currentUserId) {
-  document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('page-signup').classList.remove('active');
-    document.getElementById('page-signup').classList.add('hidden');
-    document.getElementById('main-app').classList.remove('hidden');
-    loadCurrentUser();
+  // Execute immediately to prevent split-second flash of landing page
+  document.getElementById('page-landing').classList.remove('active');
+  document.getElementById('page-landing').classList.add('hidden');
+  document.getElementById('page-signup').classList.remove('active');
+  document.getElementById('page-signup').classList.add('hidden');
+  document.getElementById('main-app').classList.remove('hidden');
+  
+  loadCurrentUser().then((isValid) => {
+    if (isValid === false) return; // session was invalid and was cleared
     loadPreferences().then(() => {
       document.querySelector('[data-page="discover"]').click();
     }).catch(() => {
       document.querySelector('[data-page="discover"]').click();
     });
   });
+}
+
+function logoutUser() {
+  currentUserId = null;
+  localStorage.removeItem('currentUserId');
+  document.getElementById('main-app').classList.add('hidden');
+  document.getElementById('page-landing').classList.remove('hidden');
+  document.getElementById('page-landing').classList.add('active');
 }
 
 // Page navigation logic
@@ -24,31 +36,92 @@ document.querySelectorAll('.nav-item').forEach((btn) => {
     e.currentTarget.classList.add('active');
     const pageId = e.currentTarget.getAttribute('data-page');
     document.querySelectorAll('main .page').forEach(p => p.classList.remove('active'));
-    
-    const targetPage = document.getElementById('page-' + pageId);
-    if(targetPage) targetPage.classList.add('active');
 
-    if(pageId === 'discover') loadDiscover();
+    const targetPage = document.getElementById('page-' + pageId);
+    if (targetPage) targetPage.classList.add('active');
+
+    if (pageId === 'discover') loadDiscover();
+    if (pageId === 'chats') loadChats();
+    if (pageId === 'calendar') loadDates();
   });
 });
 
 function showMainApp() {
+  document.getElementById('page-landing').classList.remove('active');
+  document.getElementById('page-landing').classList.add('hidden');
   document.getElementById('page-signup').classList.remove('active');
   document.getElementById('page-signup').classList.add('hidden');
   document.getElementById('main-app').classList.remove('hidden');
-  loadCurrentUser();
-  loadPreferences().then(() => {
-    document.querySelector('[data-page="discover"]').click();
-  }).catch(() => {
-    document.querySelector('[data-page="discover"]').click();
+  loadCurrentUser().then((isValid) => {
+    if (isValid === false) return; // session was invalid
+    loadPreferences().then(() => {
+      document.querySelector('[data-page="discover"]').click();
+    }).catch(() => {
+      document.querySelector('[data-page="discover"]').click();
+    });
   });
 }
 
+// Auth UI Logic
+let currentAuthMode = 'signup';
+
+function openAuthOverlay(mode) {
+  document.getElementById('page-signup').classList.remove('hidden');
+  document.getElementById('page-signup').classList.add('active');
+  switchAuthTab(mode);
+}
+
+function closeAuthOverlay() {
+  document.getElementById('page-signup').classList.remove('active');
+  document.getElementById('page-signup').classList.add('hidden');
+}
+
+function switchAuthTab(mode) {
+  currentAuthMode = mode;
+  const tabSignup = document.getElementById('tab-signup');
+  const tabLogin = document.getElementById('tab-login');
+  const signupFields = document.getElementById('signup-fields');
+  const submitBtn = document.getElementById('auth-submit-btn');
+
+  if (mode === 'signup') {
+    tabSignup.classList.add('active-tab');
+    tabSignup.classList.remove('inactive-tab');
+    tabLogin.classList.remove('active-tab');
+    tabLogin.classList.add('inactive-tab');
+    signupFields.style.display = 'block';
+    
+    // Make text fields required again
+    document.getElementById('auth-name').setAttribute('required', 'true');
+    submitBtn.innerText = 'Start Matching';
+  } else {
+    tabLogin.classList.add('active-tab');
+    tabLogin.classList.remove('inactive-tab');
+    tabSignup.classList.remove('active-tab');
+    tabSignup.classList.add('inactive-tab');
+    signupFields.style.display = 'none';
+    
+    // Remove required attr so we can submit just email
+    document.getElementById('auth-name').removeAttribute('required');
+    submitBtn.innerText = 'Log In';
+  }
+}
+
+async function submitAuth() {
+  if (currentAuthMode === 'signup') {
+    await registerUser();
+  } else {
+    await loginUser();
+  }
+}
+
 async function loadCurrentUser() {
-  if (!currentUserId) return;
+  if (!currentUserId) return false;
   try {
     const res = await fetch(`${API_BASE}/users/${currentUserId}`);
-    if (!res.ok) return;
+    if (!res.ok) {
+      logoutUser();
+      return false;
+    }
     const user = await res.json();
 
     const sidebarName = document.getElementById('sidebar-name');
@@ -78,8 +151,39 @@ async function loadCurrentUser() {
     if (datingPrefSelect && user.datingPreference) {
       datingPrefSelect.value = user.datingPreference;
     }
+    return true;
   } catch (err) {
     console.error('Failed to load current user', err);
+    return false;
+  }
+}
+
+async function loginUser() {
+  const email = document.getElementById('auth-email').value;
+  try {
+    const res = await fetch(`${API_BASE}/users/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+
+    if (!res.ok) {
+      const data = await res.json();
+      alert(data.message || "Login failed. Are you sure you signed up?");
+      return;
+    }
+
+    const user = await res.json();
+    currentUserId = user.userId;
+    localStorage.setItem('currentUserId', currentUserId);
+
+    await loadCurrentUser();
+    await loadPreferences();
+
+    showMainApp();
+  } catch (err) {
+    console.error(err);
+    alert("Server error during login.");
   }
 }
 
@@ -87,14 +191,14 @@ async function registerUser() {
   const email = document.getElementById('auth-email').value;
   const name = document.getElementById('auth-name').value;
   const age = Number(document.getElementById('auth-age').value) || 18;
-
+  const gender = document.getElementById('auth-gender').value;
   try {
     const res = await fetch(`${API_BASE}/users/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, name, age, gender: 'male', datingPreference: 'unsure' })
+      body: JSON.stringify({ email, name, age, gender, datingPreference: 'unsure' })
     });
-    
+
     if (!res.ok) {
       alert("Registration failed. Are you banned?");
       return;
@@ -103,18 +207,22 @@ async function registerUser() {
     const user = await res.json();
     currentUserId = user.userId;
     localStorage.setItem('currentUserId', currentUserId);
-    
+
     document.getElementById('email').value = user.email || email;
     document.getElementById('name').value = user.name || name;
     document.getElementById('age').value = user.age || age;
-    document.getElementById('sidebar-name').innerText = `${user.name || name}, ${user.age || age}`;
-    
+    if(document.getElementById('sidebar-name')) document.getElementById('sidebar-name').innerText = `${user.name || name}, ${user.age || age}`;
+
     // Automatically spool up a preferences record 
     await savePreferences(true);
     await loadCurrentUser();
     await loadPreferences();
 
     showMainApp();
+    // Move slightly forward to preferences initially to allow users to build their parameters natively
+    setTimeout(() => {
+      document.querySelector('[data-page="preferences"]').click();
+    }, 100);
   } catch (err) {
     console.error(err);
     alert("Server error during registration.");
@@ -127,14 +235,14 @@ async function saveProfile() {
   const age = Number(document.getElementById('age').value);
   const occupation = document.getElementById('occupation').value;
   const datingPreference = document.getElementById('datingPreference').value;
-  
+
   if (!currentUserId) {
     if (!email || !name || !age) return alert("Email, name, and age required");
     try {
       const res = await fetch(`${API_BASE}/users/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, name, age, gender: 'male', datingPreference, occupation })
+        body: JSON.stringify({ email, name, age, gender: document.getElementById('auth-gender')?.value || 'other', datingPreference, occupation })
       });
       if (!res.ok) return alert("Failed to register.");
       const user = await res.json();
@@ -144,7 +252,7 @@ async function saveProfile() {
       document.getElementById('sidebar-name').innerText = `${name}, ${age}`;
       document.getElementById('sidebar-occ').innerText = occupation;
       alert("Profile created successfully!");
-    } catch(e) { console.error(e); }
+    } catch (e) { console.error(e); }
   } else {
     try {
       await fetch(`${API_BASE}/users/${currentUserId}`, {
@@ -172,7 +280,7 @@ async function uploadProfilePic() {
 
   const formData = new FormData();
   formData.append('file', file);
-  
+
   try {
     const res = await fetch(`${API_BASE}/users/${currentUserId}/upload-picture`, {
       method: 'POST',
@@ -191,10 +299,10 @@ async function uploadProfilePic() {
 
 async function connectGoogleCalendar() {
   if (!currentUserId) return alert("Please save your profile first!");
-  
+
   // Synchronous popup block-bypass
   const popup = window.open('', 'google_auth', 'width=500,height=600');
-  
+
   try {
     const res = await fetch(`${API_BASE}/users/auth/google/url?userId=${currentUserId}`);
     const data = await res.json();
@@ -215,7 +323,7 @@ async function connectGoogleCalendar() {
 
 async function savePreferences(silent = false) {
   if (!currentUserId) return;
-  
+
   const selectedHobbies = Array.from(document.querySelectorAll('#hobbies-container input[type="checkbox"]:checked')).map(cb => cb.value);
   const preferences = {
     minAge: Number(document.getElementById('minAge').value) || 18,
@@ -282,13 +390,20 @@ async function loadPreferences() {
 async function loadDiscover() {
   if (!currentUserId) return;
   try {
-    const res = await fetch(`${API_BASE}/discover/${currentUserId}`);
-    const candidates = await res.json();
+    let res = await fetch(`${API_BASE}/discover/${currentUserId}`);
+    let candidates = await res.json();
     const discoverCard = document.getElementById('discover-card');
-    
+
     if (!candidates || candidates.length === 0) {
-      discoverCard.innerHTML = `<div class="match-card"><div class="match-details"><p style="text-align:center;">No fresh matches in your hive. Try expanding your preferences.</p></div></div>`;
-      return;
+      // Auto-regenerate and try again once
+      await fetch(`${API_BASE}/discover/${currentUserId}/regenerate`, { method: 'POST' });
+      res = await fetch(`${API_BASE}/discover/${currentUserId}`);
+      candidates = await res.json();
+      
+      if (!candidates || candidates.length === 0) {
+        discoverCard.innerHTML = `<div class="match-card"><div class="match-details"><p style="text-align:center;">No fresh matches in your hive. Try expanding your preferences.</p></div></div>`;
+        return;
+      }
     }
 
     // Display the first candidate
@@ -308,7 +423,7 @@ async function loadDiscover() {
         </div>
       </div>
     `;
-  } catch(e) {
+  } catch (e) {
     console.error(e);
   }
 }
@@ -323,7 +438,95 @@ async function swipe(targetId, type) {
     });
     alert(`You swiped ${type}!`);
     loadDiscover(); // load next
-  } catch(e) {
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+
+
+async function loadChats() {
+  if (!currentUserId) return;
+  const chatList = document.getElementById('chat-list');
+  try {
+    const res = await fetch(`${API_BASE}/messaging/user/${currentUserId}/conversations`);
+    if (!res.ok) return;
+    const conversations = await res.json();
+
+    if (!conversations || conversations.length === 0) {
+      chatList.innerHTML = `<div class="match-card" style="justify-content: center; color: var(--muted-brown);">No conversations yet. Buzz some profiles!</div>`;
+      return;
+    }
+
+    chatList.innerHTML = conversations.map(c => {
+      const m = c.match;
+      const other = m.user1.userId == currentUserId ? m.user2 : m.user1;
+      const preview = c.lastMessagePreview || 'No messages yet';
+      return `
+        <div class="match-card">
+          <img src="${other.profilePicUrl || 'https://i.pravatar.cc/150?u=' + other.userId}" class="match-thumb">
+          <div class="match-details">
+            <h3>${other.name}, ${other.age}</h3>
+            <p style="color: var(--muted-brown); font-style: italic;">${preview}</p>
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch (e) {
+    console.error('Failed to load chats', e);
+  }
+}
+
+async function loadDates() {
+  if (!currentUserId) return;
+  const dateList = document.querySelector('#page-calendar .card-list');
+  try {
+    const res = await fetch(`${API_BASE}/dates/user/${currentUserId}`);
+    if (!res.ok) return;
+    const dates = await res.json();
+
+    if (!dates || dates.length === 0) {
+      dateList.innerHTML = `<div class="match-card" style="justify-content: center; color: var(--muted-brown);">No upcoming dates scheduled.</div>`;
+      return;
+    }
+
+    dateList.innerHTML = dates.map(d => {
+      const m = d.match;
+      const other = m.user1.userId == currentUserId ? m.user2 : m.user1;
+      const loc = d.location;
+      const statusLabel = d.status.replace(/_/g, ' ');
+      return `
+        <div class="match-card">
+          <div class="match-details">
+            <h3>${other.name} — ${loc.name}</h3>
+            <p>${loc.address || loc.category || 'Somewhere fun'}</p>
+            <p style="margin-top: 5px; text-transform: capitalize; color: var(--muted-brown);">${statusLabel}</p>
+          </div>
+          <div class="match-actions">
+            ${d.status !== 'accepted_by_both' ? `
+              <button class="btn btn-buzz" onclick="respondToDate(${d.suggestionId}, 'accept')">Accept</button>
+              <button class="btn btn-unlike" onclick="respondToDate(${d.suggestionId}, 'reject')"><i class="fa fa-times"></i></button>
+            ` : '<span style="color: var(--honey);">✓ Confirmed</span>'}
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch (e) {
+    console.error('Failed to load dates', e);
+  }
+}
+
+async function respondToDate(suggestionId, action) {
+  if (!currentUserId) return;
+  try {
+    await fetch(`${API_BASE}/dates/${suggestionId}/${action}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: Number(currentUserId) })
+    });
+    alert(`Date ${action}ed!`);
+    loadDates();
+  } catch (e) {
     console.error(e);
   }
 }

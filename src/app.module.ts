@@ -35,6 +35,7 @@ import { AppController } from './app.controller';
         username: process.env.DB_USER || 'root',
         password: process.env.DB_PASSWORD || 'Mysqlpassword',
         database: process.env.DB_NAME || 'BuzzMateDB',
+        legacySpatialSupport: false,
         entities: [
           User,
           Preference,

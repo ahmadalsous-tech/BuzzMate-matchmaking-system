@@ -12,24 +12,32 @@ export class UsersController {
     return this.usersService.register(dto);
   }
 
+  @Post('login')
+  login(@Body() dto: { email: string }) {
+    return this.usersService.login(dto.email);
+  }
+
   @Get('auth/google/url')
   async getGoogleAuthUrl(@Query('userId') userIdParam: string) {
     const { google } = require('googleapis');
-    const path = require('path');
-    const fs = require('fs');
-    const creds = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'PythonBackend', 'credentials.json'), 'utf8'));
-    const config = creds.installed || creds.web;
+    
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    if (!clientId || !clientSecret) {
+      throw new Error('GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET env vars not set');
+    }
     
     const oauth2Client = new google.auth.OAuth2(
-      config.client_id,
-      config.client_secret,
+      clientId,
+      clientSecret,
       'http://localhost:3000/users/auth/google/callback'
     );
     
     const url = oauth2Client.generateAuthUrl({
       access_type: 'offline',
       scope: ['https://www.googleapis.com/auth/calendar'],
-      state: userIdParam
+      state: userIdParam,
+      prompt: 'consent'
     });
     
     return { url };
@@ -39,14 +47,16 @@ export class UsersController {
   async googleAuthCallback(@Query('code') code: string, @Query('state') userIdParam: string, @Res() res: any) {
     const userId = parseInt(userIdParam, 10);
     const { google } = require('googleapis');
-    const path = require('path');
-    const fs = require('fs');
-    const creds = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'PythonBackend', 'credentials.json'), 'utf8'));
-    const config = creds.installed || creds.web;
+    
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    if (!clientId || !clientSecret) {
+      throw new Error('GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET env vars not set');
+    }
     
     const oauth2Client = new google.auth.OAuth2(
-      config.client_id,
-      config.client_secret,
+      clientId,
+      clientSecret,
       'http://localhost:3000/users/auth/google/callback'
     );
     
@@ -66,8 +76,6 @@ export class UsersController {
     return this.usersService.update(id, dto);
   }
 
-
-
   @Post(':id/upload-picture')
   @UseInterceptors(require('@nestjs/platform-express').FileInterceptor('file'))
   async uploadPicture(
@@ -78,4 +86,3 @@ export class UsersController {
     return { profilePicUrl: url };
   }
 }
-

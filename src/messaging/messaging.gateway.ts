@@ -49,9 +49,15 @@ export class MessagingGateway implements OnGatewayConnection {
       payload.body,
     );
 
+    // Resolve the other participant so we can push to their user room
+    const convo = await this.messagingService.getConversation(payload.conversationId);
+    const otherUserId =
+      convo.match.user1Id === payload.senderId
+        ? convo.match.user2Id
+        : convo.match.user1Id;
+
     this.server.to(`conversation:${payload.conversationId}`).emit('new_message', message);
-    this.server.to(`user:${payload.senderId}`).emit('message_sent', message);
+    this.server.to(`user:${otherUserId}`).emit('new_message', message);
     client.emit('message_ack', { messageId: message.messageId });
   }
 }
-

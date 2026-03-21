@@ -19,7 +19,7 @@ export class DatesService {
     private readonly locationRepo: Repository<Location>,
     private readonly usersService: UsersService,
     private readonly preferencesService: PreferencesService,
-  ) {}
+  ) { }
 
   async suggestDateForMatch(match: Match): Promise<SuggestedDate | null> {
     try {
@@ -41,7 +41,7 @@ export class DatesService {
         query.where('location.category = :category', { category: preferredCategory });
       }
       query.orderBy('RAND()').limit(1);
-      
+
       let location = await query.getOne();
       if (!location) {
         // Fallback to any location
@@ -54,14 +54,14 @@ export class DatesService {
       }
 
       // Check Google Calendar API for mutually available slots
-      const hasCalendarOverlaps = await this.checkCalendarAvailability(
+      const timeSlot = await this.suggestMutualSlot(
         user1.email,
         user1.googleRefreshToken,
         user2.email,
         user2.googleRefreshToken
       );
 
-      if (!hasCalendarOverlaps) {
+      if (!timeSlot) {
         this.logger.warn(`Could not find mutual availability for Match ${match.matchId}, but proposing date anyway.`);
         // In reality we might schedule something async, but here we just proceed to propose
       }
@@ -70,7 +70,9 @@ export class DatesService {
       const suggestedDate = this.suggestedDateRepo.create({
         match,
         location,
-        status: 'suggested'
+        status: 'suggested',
+        scheduledStart: timeSlot ? timeSlot.start : undefined,
+        scheduledEnd: timeSlot ? timeSlot.end : undefined,
       });
 
       return await this.suggestedDateRepo.save(suggestedDate);
@@ -84,7 +86,7 @@ export class DatesService {
   async acceptDate(suggestionId: number, userId: number): Promise<SuggestedDate> {
     const suggestion = await this.suggestedDateRepo.findOne({
       where: { suggestionId },
-      relations: ['match'],
+      relations: ['match', 'match.user1', 'match.user2'],
     });
 
     if (!suggestion) throw new Error('Suggested date not found');
@@ -107,17 +109,53 @@ export class DatesService {
       if (isUser1) suggestion.status = 'accepted_by_both';
     }
 
+    const saved = await this.suggestedDateRepo.save(suggestion);
+
+    if (saved.status === 'accepted_by_both' && saved.scheduledStart && saved.scheduledEnd) {
+      await this.bookCalendarEvent(match.user1.email, match.user1.googleRefreshToken, match.user2.email, match.user2.googleRefreshToken, saved.scheduledStart, saved.scheduledEnd);
+    }
+
+    return saved;
+  }
+  async rejectDate(suggestionId: number, userId: number): Promise<SuggestedDate> {
+    const suggestion = await this.suggestedDateRepo.findOne({
+      where: { suggestionId },
+      relations: ['match'],
+    });
+    if (!suggestion) throw new Error('Suggested date not found');
+    const match = suggestion.match;
+    const isUser1 = match.user1Id === userId;
+    const isUser2 = match.user2Id === userId;
+    if (!isUser1 && !isUser2) throw new Error('User not part of this match');
+    suggestion.status = 'suggested'; // Reset to suggested so a new date can be proposed
     return await this.suggestedDateRepo.save(suggestion);
   }
+  async getDatesForUser(userId: number): Promise<SuggestedDate[]> {
+    return this.suggestedDateRepo
+      .createQueryBuilder('sd')
+      .innerJoinAndSelect('sd.match', 'm')
+      .innerJoinAndSelect('sd.location', 'l')
+      .innerJoinAndSelect('m.user1', 'u1')
+      .innerJoinAndSelect('m.user2', 'u2')
+      .where('m.user_1_id = :userId OR m.user_2_id = :userId', { userId })
+      .orderBy('sd.created_at', 'DESC')
+      .getMany();
+  }
 
-  private async checkCalendarAvailability(user1Email: string, token1?: string, user2Email?: string, token2?: string): Promise<boolean> {
+  private async suggestMutualSlot(user1Email: string, token1?: string, user2Email?: string, token2?: string): Promise<{start: Date, end: Date} | null> {
     if (!token1 || !token2 || !user2Email) {
       this.logger.debug('One or both users missing Google Calendar tokens, skipping check.');
-      return false; 
+      return null;
     }
-    
+
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    const tokenUri = process.env.GOOGLE_TOKEN_URI || 'https://oauth2.googleapis.com/token';
+    if (!clientId || !clientSecret) {
+      this.logger.warn('GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET env vars not set, skipping calendar check.');
+      return null;
+    }
     try {
-      // Execute the python script to fetch availabilities and schedule event
       const { exec } = require('child_process');
       const { promisify } = require('util');
       const path = require('path');
@@ -125,15 +163,68 @@ export class DatesService {
 
       const isDist = __dirname.includes('dist');
       const baseDir = isDist ? path.join(__dirname, '..', '..') : path.join(__dirname, '..', '..', 'src');
-      
-      const scriptPath = path.join(baseDir, 'PythonBackend', 'calendar_script.py');
-      const credsPath = path.join(baseDir, 'PythonBackend', 'credentials.json');
 
-      const { stdout } = await execAsync(`python "${scriptPath}" "${credsPath}" "${user1Email}" "${token1}" "${user2Email}" "${token2}"`);
-      
+      const scriptPath = path.join(baseDir, 'PythonBackend', 'calendar_script.py');
+      const { stdout } = await execAsync(`python "${scriptPath}" suggest`, {
+        env: {
+          ...process.env,
+          U1_EMAIL: user1Email,
+          U1_REFRESH: token1,
+          U2_EMAIL: user2Email,
+          U2_REFRESH: token2,
+          GOOGLE_CLIENT_ID: clientId,
+          GOOGLE_CLIENT_SECRET: clientSecret,
+          GOOGLE_TOKEN_URI: tokenUri
+        }
+      });
+
       const result = JSON.parse(stdout.trim());
       if (result.status === 'success') {
-        this.logger.log(`Successfully booked date slot from ${result.start} to ${result.end}. Event Link: ${result.eventLink}`);
+        return { start: new Date(result.start), end: new Date(result.end) };
+      } else {
+        this.logger.warn(`Python calendar script returned error: ${result.error}`);
+        return null;
+      }
+    } catch (e: any) {
+      this.logger.error(`Failed to execute python calendar script: ${e.message}`);
+      return null;
+    }
+  }
+
+  private async bookCalendarEvent(user1Email: string, token1?: string, user2Email?: string, token2?: string, start?: Date, end?: Date): Promise<boolean> {
+    if (!token1 || !token2 || !user2Email || !start || !end) return false;
+
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    const tokenUri = process.env.GOOGLE_TOKEN_URI || 'https://oauth2.googleapis.com/token';
+    if (!clientId || !clientSecret) return false;
+
+    try {
+      const { exec } = require('child_process');
+      const { promisify } = require('util');
+      const path = require('path');
+      const execAsync = promisify(exec);
+
+      const isDist = __dirname.includes('dist');
+      const baseDir = isDist ? path.join(__dirname, '..', '..') : path.join(__dirname, '..', '..', 'src');
+
+      const scriptPath = path.join(baseDir, 'PythonBackend', 'calendar_script.py');
+      const { stdout } = await execAsync(`python "${scriptPath}" book "${start.toISOString()}" "${end.toISOString()}"`, {
+        env: {
+          ...process.env,
+          U1_EMAIL: user1Email,
+          U1_REFRESH: token1,
+          U2_EMAIL: user2Email,
+          U2_REFRESH: token2,
+          GOOGLE_CLIENT_ID: clientId,
+          GOOGLE_CLIENT_SECRET: clientSecret,
+          GOOGLE_TOKEN_URI: tokenUri
+        }
+      });
+
+      const result = JSON.parse(stdout.trim());
+      if (result.status === 'success') {
+        this.logger.log(`Successfully booked date slot. Event Link: ${result.eventLink}`);
         return true;
       } else {
         this.logger.warn(`Python calendar script returned error: ${result.error}`);

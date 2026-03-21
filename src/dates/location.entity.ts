@@ -14,7 +14,9 @@ export class Location {
   @Column({ name: 'price_tier', type: 'int', nullable: true })
   priceTier?: number;
 
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  address?: string;
+
   @Column({ name: 'coords', type: 'point', nullable: true })
   coords?: string;
 }
-

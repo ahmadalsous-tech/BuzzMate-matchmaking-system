@@ -1,6 +1,5 @@
 import {
   Column,
-  CreateDateColumn,
   Entity,
   JoinColumn,
   ManyToOne,
@@ -23,13 +22,9 @@ export class Block {
   @JoinColumn({ name: 'blocked_id' })
   blocked!: User;
 
-  @CreateDateColumn({ name: 'created_at' })
-  createdAt!: Date;
-
   @Column({ name: 'blocker_id' })
   blockerId!: number;
 
   @Column({ name: 'blocked_id' })
   blockedId!: number;
 }
-
