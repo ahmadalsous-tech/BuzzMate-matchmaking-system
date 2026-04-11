@@ -1,7 +1,12 @@
 let currentUserId = localStorage.getItem('currentUserId') || null;
 
 const API_BASE = 'http://localhost:3000';
-
+// Tracks which candidate userIds the current user has already swiped on
+// during this browser session (Map<targetUserId: number, action: 'like'|'dislike'>).
+// Cleared on page reload / new login. The backend has its own idempotency
+// guard, but this client-side map lets us update the UI instantly without
+// a round-trip and survive re-renders of the discover grid.
+const swipedThisSession = new Map();
 // Initialize session if exists
 if (currentUserId) {
   // Execute immediately to prevent split-second flash of landing page
@@ -18,10 +23,13 @@ if (currentUserId) {
     }).catch(() => {
       document.querySelector('[data-page="discover"]').click();
     });
+    startMatchPolling();
   });
 }
 
 function logoutUser() {
+  stopMatchPolling();
+  _knownMatchIds.clear();
   currentUserId = null;
   localStorage.removeItem('currentUserId');
   document.getElementById('main-app').classList.add('hidden');
@@ -60,6 +68,7 @@ function showMainApp() {
     }).catch(() => {
       document.querySelector('[data-page="discover"]').click();
     });
+    startMatchPolling(); // begin watching for incoming buzz-backs
   });
 }
 
@@ -628,36 +637,63 @@ async function loadDiscover() {
     if (serverExpiresAt) {
       updateRegenerationTimer(serverExpiresAt);
     }
-
-    discoverCard.innerHTML = candidates.map(c => `
-      <article class="group bg-surface-container-lowest rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col">
-          <div class="relative h-72 overflow-hidden">
-              <img alt="${c.name}" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" src="${c.profilePicUrl || '/assets/BeeProfileIcon.png'}">
-              <div class="absolute bottom-4 left-4 right-4">
-                  <span class="bg-surface-container-lowest/80 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold text-primary flex items-center w-fit gap-1">
-                      <span class="material-symbols-outlined text-[14px]">location_on</span> ${c.distance ? c.distance + ' miles away' : 'Nearby'}
-                  </span>
-              </div>
+    discoverCard.innerHTML = candidates.map(c => {
+    const alreadySwiped = swipedThisSession.has(c.userId);
+    const swipedAction = swipedThisSession.get(c.userId); // 'like' | 'dislike'
+    const isBuzz = swipedAction === 'like';
+    const passBtn = `
+        <button
+          id="btn-dislike-${c.userId}"
+          class="flex-1 bg-surface-container-high text-secondary font-bold py-3 rounded-full flex items-center justify-center gap-2 hover:bg-surface-variant transition-all ${alreadySwiped ? 'opacity-40 cursor-not-allowed' : ''}"
+          onclick="swipe(${c.userId}, 'dislike')"
+          ${alreadySwiped ? 'disabled' : ''}
+        >
+          <span class="material-symbols-outlined">close</span> Pass
+        </button>`;
+ 
+    const buzzBtn = `
+        <button
+          id="btn-buzz-${c.userId}"
+          class="flex-1 honey-gradient text-on-primary-fixed font-bold py-3 rounded-full flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all ${alreadySwiped ? 'opacity-40 cursor-not-allowed' : ''}"
+          onclick="swipe(${c.userId}, 'like')"
+          ${alreadySwiped ? 'disabled' : ''}
+        >
+          <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">hive</span> Buzz
+        </button>`;
+    const swipedOverlay = alreadySwiped ? `
+        <div class="absolute inset-0 bg-surface-container-lowest/70 backdrop-blur-sm flex items-center justify-center rounded-xl z-10 pointer-events-none">
+          <span class="px-4 py-2 rounded-full font-bold text-sm ${isBuzz ? 'bg-primary text-on-primary' : 'bg-surface-variant text-secondary'}">
+            ${isBuzz ? '🐝 Buzzed!' : '✕ Passed'}
+          </span>
+        </div>` : '';
+ 
+    return `
+    <article class="group bg-surface-container-lowest rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col relative">
+      ${swipedOverlay}
+      <div class="relative h-72 overflow-hidden">
+          <img alt="${c.name}" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" src="${c.profilePicUrl || '/assets/BeeProfileIcon.png'}">
+          <div class="absolute bottom-4 left-4 right-4">
+            <span class="bg-surface-container-lowest/80 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold text-primary flex items-center w-fit gap-1">
+              
+             <span class="material-symbols-outlined text-[14px]">location_on</span> ${c.distance ? c.distance + ' miles away' : 'Nearby'}
+            </span>
           </div>
-          <div class="p-6 flex-1 flex flex-col">
-              <div class="mb-4">
-                  <h4 class="text-2xl font-headline font-extrabold text-on-surface">${c.name}, ${c.age}</h4>
-                  <p class="text-secondary text-sm mt-2 line-clamp-2 italic">${c.preferences && c.preferences.opener ? c.preferences.opener : 'Looking for my match!'}</p>
-              </div>
-              <div class="flex flex-wrap gap-2 mb-6">
+      </div>
+      <div class="p-6 flex-1 flex flex-col">
+          <div class="mb-4">
+              <h4 class="text-2xl font-headline font-extrabold text-on-surface">${c.name}, ${c.age}</h4>
+              <p class="text-secondary text-sm mt-2 line-clamp-2 italic">${c.preferences && c.preferences.opener ? c.preferences.opener : 'Looking for my match!'}</p>
+          </div>
+          <div class="flex flex-wrap gap-2 mb-6">
                   ${(c.preferences && c.preferences.hobbies ? c.preferences.hobbies : []).slice(0, 3).map(h => `<span class="px-3 py-1 bg-surface-container-low text-xs font-medium rounded-full capitalize">${h}</span>`).join('')}
-              </div>
-              <div class="mt-auto flex gap-2">
-                  <button class="flex-1 bg-surface-container-high text-secondary font-bold py-3 rounded-full flex items-center justify-center gap-2 hover:bg-surface-variant transition-all" onclick="swipe(${c.userId}, 'dislike')">
-                      <span class="material-symbols-outlined">close</span> Pass
-                  </button>
-                  <button class="flex-1 honey-gradient text-on-primary-fixed font-bold py-3 rounded-full flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all" onclick="swipe(${c.userId}, 'like')">
-                      <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">hive</span> Buzz
-                  </button>
-              </div>
           </div>
-      </article>
-    `).join('');
+          <div class="mt-auto flex gap-2">
+                  ${passBtn}
+                  ${buzzBtn}
+          </div>
+      </div>
+    </article>`;
+    }).join('');
   } catch (e) {
     console.error(e);
   }
@@ -665,18 +701,128 @@ async function loadDiscover() {
 
 async function swipe(targetId, type) {
   if (!currentUserId) return;
+ 
+  // Prevent duplicate swipes within the same session (belt-and-suspenders
+  // alongside the backend idempotency guard)
+  if (swipedThisSession.has(targetId)) return;
+ 
+  // Immediately disable both buttons on this card so the user can't
+  // double-tap while the request is in-flight
+  const passBtn = document.getElementById(`btn-dislike-${targetId}`);
+  const buzzBtn = document.getElementById(`btn-buzz-${targetId}`);
+  if (passBtn) passBtn.disabled = true;
+  if (buzzBtn) buzzBtn.disabled = true;
+ 
   try {
-    await fetch(`${API_BASE}/interactions`, {
+    const res = await fetch(`${API_BASE}/interactions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ senderId: Number(currentUserId), receiverId: targetId, actionType: type })
     });
-    alert(`You swiped ${type}!`);
-    loadDiscover(); // load next
+ 
+    if (!res.ok) {
+      // Re-enable buttons if the request failed so user can retry
+      if (passBtn) passBtn.disabled = false;
+      if (buzzBtn) buzzBtn.disabled = false;
+      alert('Something went wrong. Please try again.');
+      return;
+    }
+
+    const data = await res.json();
+ 
+    // Record in session map so the card stays visually locked on re-render
+    swipedThisSession.set(targetId, type);
+ 
+    // Update this card's UI in-place without refetching the whole list
+    const isBuzz = type === 'like';
+    const card = passBtn?.closest('article');
+    if (card) {
+      card.querySelector('.swiped-overlay')?.remove();
+      const overlay = document.createElement('div');
+      overlay.className = 'swiped-overlay absolute inset-0 bg-surface-container-lowest/70 backdrop-blur-sm flex items-center justify-center rounded-xl z-10 pointer-events-none';
+      overlay.innerHTML = `
+        <span class="px-4 py-2 rounded-full font-bold text-sm ${isBuzz ? 'bg-primary text-on-primary' : 'bg-surface-variant text-secondary'}">
+          ${isBuzz ? '🐝 Buzzed!' : '✕ Passed'}
+        </span>`;
+      card.appendChild(overlay);
+      if (passBtn) passBtn.classList.add('opacity-40', 'cursor-not-allowed');
+      if (buzzBtn) buzzBtn.classList.add('opacity-40', 'cursor-not-allowed');
+    }
+
+    // If the backend signals a mutual match, show the celebration modal.
+    // Otherwise show the subtle buzz confirmation.
+    if (data.match) {
+      // Find the matched user's card info from the DOM to populate the modal avatars
+      const theirAvatar = card?.querySelector('img')?.src || 'https://i.pravatar.cc/150';
+      const theirName   = card?.querySelector('h4')?.textContent?.replace(/,.*/, '').trim() || 'them';
+      openMatchModal(theirName, theirAvatar, data.match.matchId);
+    } else if (type === 'like') {
+      // Non-match buzz: subtle toast is enough, no blocking alert
+      showRegenToast('🐝 Buzzed! Waiting to see if they buzz back…');
+      setTimeout(hideRegenToast, 3000);
+    }
+    // Dislike: always silent
+ 
   } catch (e) {
     console.error(e);
+    if (passBtn) passBtn.disabled = false;
+    if (buzzBtn) buzzBtn.disabled = false;
   }
 }
+// ---------------------------------------------------------------------------
+// Match polling — detects when the *other* user buzzes back while the current
+// user is already on the discover page.  Uses GET /matches/user/:id every 12s
+// and shows the modal for any matchId not seen in this session.
+// ---------------------------------------------------------------------------
+// matchId is stored so "Start Buzzing" can navigate straight to that conversation
+let   _matchPollInterval = null;
+const _knownMatchIds     = new Set();
+async function _initKnownMatches() {
+  if (!currentUserId) return;
+  try {
+    const res = await fetch(`${API_BASE}/matches/user/${currentUserId}`);
+    if (!res.ok) return;
+    const matches = await res.json();
+    matches.forEach(m => _knownMatchIds.add(m.matchId));
+  } catch (_) {}
+}
+
+async function _pollForNewMatches() {
+  if (!currentUserId) return;
+  try {
+    const res = await fetch(`${API_BASE}/matches/user/${currentUserId}`);
+    if (!res.ok) return;
+    const matches = await res.json();
+    for (const m of matches) {
+      if (!_knownMatchIds.has(m.matchId)) {
+        _knownMatchIds.add(m.matchId);
+        // Determine which user is the other person
+        const other = Number(m.user1Id) === Number(currentUserId) ? m.user2 : m.user1;
+        openMatchModal(
+          other.name,
+          other.profilePicUrl || '/assets/BeeProfileIcon.png',
+          m.matchId
+        );
+        break; // Show one at a time; next poll will catch any additional ones
+      }
+    }
+  } catch (_) {}
+}
+
+function startMatchPolling() {
+  if (_matchPollInterval) return; // Already running
+  _initKnownMatches().then(() => {
+    _matchPollInterval = setInterval(_pollForNewMatches, 12000);
+  });
+}
+ 
+function stopMatchPolling() {
+  if (_matchPollInterval) {
+    clearInterval(_matchPollInterval);
+    _matchPollInterval = null;
+  }
+}
+
 
 
 
@@ -1264,11 +1410,22 @@ function renderAwaitingDates(pendingDates) {
 
   container.innerHTML = pendingDates.map(d => {
     const m = d.match;
-    const other = m.user1.userId == currentUserId ? m.user2 : m.user1;
+    const isUser1 = m.user1Id == currentUserId;
+    const other = isUser1 ? m.user2 : m.user1;
     const loc = d.location;
     const locName = loc?.name || loc?.category || 'Somewhere fun';
     const dateStr = d.scheduledStart ? `for ${formatDateDisplay(d.scheduledStart)}` : '';
     const timeStr = d.scheduledStart ? formatTimeDisplay(d.scheduledStart) : '';
+
+    const acceptedByMe = (isUser1 && d.status === 'accepted_by_user_1') || (!isUser1 && d.status === 'accepted_by_user_2');
+
+    let actionsHtml = '';
+    if (acceptedByMe) {
+      actionsHtml = `<div class="text-center w-full py-2.5 text-secondary font-bold text-xs italic">Waiting for match to accept</div>`;
+    } else {
+      actionsHtml = `<button id="accept-btn-${d.suggestionId}" class="flex-grow py-2.5 rounded-full bg-primary-container text-on-primary-container font-bold text-xs hover:scale-[1.02] active:scale-95 transition-transform shadow-sm" onclick="respondToDate(${d.suggestionId}, 'accept')">Accept</button>
+                <button id="decline-btn-${d.suggestionId}" class="flex-grow py-2.5 rounded-full bg-surface-container-high text-secondary font-bold text-xs hover:scale-[1.02] active:scale-95 transition-transform" onclick="respondToDate(${d.suggestionId}, 'reject')">Decline</button>`;
+    }
 
     return `
     <div class="bg-surface-container-highest/40 p-1 rounded-2xl">
@@ -1283,8 +1440,7 @@ function renderAwaitingDates(pendingDates) {
                 ${dateStr ? `${dateStr}${timeStr ? ` at ${timeStr}` : ''}.` : '.'}
             </p>
             <div class="flex gap-2 mt-4">
-                <button id="accept-btn-${d.suggestionId}" class="flex-grow py-2.5 rounded-full bg-primary-container text-on-primary-container font-bold text-xs hover:scale-[1.02] active:scale-95 transition-transform shadow-sm" onclick="respondToDate(${d.suggestionId}, 'accept')">Accept</button>
-                <button id="decline-btn-${d.suggestionId}" class="flex-grow py-2.5 rounded-full bg-surface-container-high text-secondary font-bold text-xs hover:scale-[1.02] active:scale-95 transition-transform" onclick="respondToDate(${d.suggestionId}, 'reject')">Decline</button>
+                ${actionsHtml}
             </div>
         </div>
     </div>`;
@@ -1402,6 +1558,29 @@ async function respondToDate(suggestionId, action) {
     // Restore buttons
     if (acceptBtn) { acceptBtn.disabled = false; acceptBtn.textContent = 'Accept'; }
     if (declineBtn) { declineBtn.disabled = false; declineBtn.textContent = 'Decline'; }
+  }
+}
+
+async function refreshSuggestions() {
+  if (!currentUserId) return;
+  const awaitingList = document.getElementById('calendar-awaiting-list');
+  if (awaitingList) {
+    awaitingList.innerHTML = `<div class="flex items-center justify-center py-8">
+                                <span class="material-symbols-outlined text-primary animate-spin text-3xl">progress_activity</span>
+                              </div>`;
+  }
+  
+  try {
+    const res = await fetch(`${API_BASE}/dates/user/${currentUserId}/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    if (!res.ok) throw new Error('Refresh failed');
+    await loadDates();
+  } catch (e) {
+    console.error('Failed to refresh suggestions:', e);
+    alert('Failed to refresh suggestions. Please try again.');
+    await loadDates();
   }
 }
 

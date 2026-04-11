@@ -119,7 +119,7 @@ for google calendar:
 -Install Google client library for Python:
 
 `python3 -m pip install --upgrade google-api-python-client google-auth-httplib2 google-auth-oauthlib`
-
+pip install tzdata
 you can use MySQL Workbench to act as a server for the BuzzMateDB
 
 then:

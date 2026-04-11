@@ -445,7 +445,12 @@
                     </section>
                     <!-- Awaiting Confirmation Section -->
                     <section>
-                        <h3 class="text-xl font-bold text-on-surface mb-4 font-headline">Awaiting confirmation</h3>
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-xl font-bold text-on-surface font-headline">Awaiting confirmation</h3>
+                            <button onclick="refreshSuggestions()" class="w-8 h-8 rounded-full flex items-center justify-center bg-surface-container-high hover:bg-surface-variant transition-colors text-primary" title="Refresh Suggestions">
+                                <span class="material-symbols-outlined text-[20px]">sync</span>
+                            </button>
+                        </div>
                         <div class="space-y-4" id="calendar-awaiting-list">
                             <div class="flex items-center justify-center py-8">
                                 <span class="material-symbols-outlined text-primary animate-spin text-3xl">progress_activity</span>
@@ -724,5 +729,183 @@
     </div>
   </div>
 
+  <!-- ================= MATCH MODAL ================= -->
+
+  <style>
+    /* All modal styles are raw CSS — not Tailwind — so they don't depend on
+       the pre-compiled stylesheet having been regenerated. */
+ 
+    #match-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #match-modal.hidden { display: none; }
+ 
+    #match-modal-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+    }
+ 
+    #match-modal-card {
+      position: relative;
+      z-index: 1;
+      width: calc(100% - 2rem);
+      max-width: 22rem;
+      border-radius: 1.75rem;
+      overflow: hidden;
+      box-shadow: 0 32px 64px rgba(0,0,0,0.45);
+      /* Initial state — translated down + invisible */
+      transform: translateY(48px) scale(0.93);
+      opacity: 0;
+      transition: transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1),
+                  opacity  0.3s ease;
+    }
+    /* Entered state — snaps up with a spring overshoot */
+    #match-modal-card.modal-visible {
+      transform: translateY(0) scale(1);
+      opacity: 1;
+    }
+ 
+    .match-modal-header {
+      background: radial-gradient(circle at top left, #fdc003, #755700);
+      padding: 2rem 1.5rem 1.5rem;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .match-modal-hex {
+      position: absolute;
+      font-size: 6rem;
+      opacity: 0.08;
+      user-select: none;
+      line-height: 1;
+    }
+    .match-modal-hex.tl { top: -1.5rem; left: -1.5rem; }
+    .match-modal-hex.br { bottom: -1rem;  right: -1rem; font-size: 5rem; }
+ 
+    .match-modal-eyebrow {
+      color: rgba(255,241,219,0.75);
+      font-size: 0.7rem;
+      font-weight: 800;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      margin-bottom: 0.2rem;
+    }
+    .match-modal-headline {
+      color: #fff1db;
+      font-size: 2.25rem;
+      font-weight: 900;
+      line-height: 1.1;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    .match-modal-sub {
+      color: rgba(255,241,219,0.7);
+      font-size: 0.875rem;
+      margin-top: 0.4rem;
+    }
+    .match-modal-sub strong { color: #fff1db; }
+ 
+    .match-modal-avatars {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+      margin-top: 1.25rem;
+    }
+    .match-modal-avatar {
+      width: 5rem;
+      height: 5rem;
+      border-radius: 9999px;
+      object-fit: cover;
+      border: 3px solid rgba(255,241,219,0.5);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+    }
+    .match-modal-honey {
+      font-size: 2rem;
+      animation: honeyBounce 0.8s ease infinite alternate;
+    }
+    @keyframes honeyBounce {
+      from { transform: translateY(0);    }
+      to   { transform: translateY(-6px); }
+    }
+ 
+    .match-modal-actions {
+      background: var(--surface-container-lowest, #fffbf0);
+      padding: 1.25rem 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.625rem;
+    }
+    .match-modal-btn-primary {
+      background: radial-gradient(circle at top left, #fdc003, #755700);
+      color: #3d2b00;
+      font-weight: 800;
+      font-size: 1rem;
+      padding: 0.875rem;
+      border-radius: 9999px;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      box-shadow: 0 4px 16px rgba(117,87,0,0.35);
+      transition: opacity 0.15s, transform 0.15s;
+    }
+    .match-modal-btn-primary:hover  { opacity: 0.92; }
+    .match-modal-btn-primary:active { transform: scale(0.97); }
+    .match-modal-btn-secondary {
+      background: var(--surface-container-high, #f0e8d8);
+      color: var(--text-secondary, #755700);
+      font-weight: 700;
+      font-size: 0.875rem;
+      padding: 0.75rem;
+      border-radius: 9999px;
+      border: none;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .match-modal-btn-secondary:hover { background: var(--surface-variant, #e8dcc8); }
+  </style>
+ 
+  <div id="match-modal" class="hidden">
+    <div id="match-modal-backdrop" onclick="closeMatchModal()"></div>
+    <div id="match-modal-card">
+ 
+      <div class="match-modal-header">
+        <span class="match-modal-hex tl">⬡</span>
+        <span class="match-modal-hex br">⬡</span>
+ 
+        <p class="match-modal-eyebrow">It's a</p>
+        <h2 class="match-modal-headline">Buzz Match! 🐝</h2>
+        <p class="match-modal-sub">You and <strong id="match-modal-name"></strong> both buzzed!</p>
+ 
+        <div class="match-modal-avatars">
+          <img id="match-modal-my-avatar"    class="match-modal-avatar" src="https://i.pravatar.cc/150?u=me"   alt="You"/>
+          <span class="match-modal-honey">🍯</span>
+          <img id="match-modal-their-avatar" class="match-modal-avatar" src="https://i.pravatar.cc/150?u=them" alt="Match"/>
+        </div>
+      </div>
+ 
+      <div class="match-modal-actions">
+        <button class="match-modal-btn-primary" onclick="goToMatchChat()">
+          <span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1; font-size:20px;">chat</span>
+          Start Buzzing
+        </button>
+        <button class="match-modal-btn-secondary" onclick="closeMatchModal()">
+          Keep Exploring
+        </button>
+      </div>
+ 
+    </div>
+  </div>
+ 
 </body>
 </html>

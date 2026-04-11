@@ -21,7 +21,7 @@ export class DatesService {
     private readonly preferencesService: PreferencesService,
   ) { }
 
-  async suggestDateForMatch(match: Match): Promise<SuggestedDate | null> {
+  async suggestDatesForMatch(match: Match, count: number = 3): Promise<SuggestedDate[]> {
     try {
       const user1 = await this.usersService.findOne(match.user1Id);
       const user2 = await this.usersService.findOne(match.user2Id);
@@ -40,17 +40,17 @@ export class DatesService {
       if (preferredCategory) {
         query.where('location.category = :category', { category: preferredCategory });
       }
-      query.orderBy('RAND()').limit(1);
+      query.orderBy('RAND()').limit(count);
 
-      let location = await query.getOne();
-      if (!location) {
+      let locations = await query.getMany();
+      if (!locations || locations.length === 0) {
         // Fallback to any location
-        location = await this.locationRepo.createQueryBuilder('location').orderBy('RAND()').limit(1).getOne();
+        locations = await this.locationRepo.createQueryBuilder('location').orderBy('RAND()').limit(count).getMany();
       }
 
-      if (!location) {
+      if (!locations || locations.length === 0) {
         this.logger.warn('No locations available in the database.');
-        return null; // DB might be empty
+        return []; // DB might be empty
       }
 
       // Check Google Calendar API for mutually available slots
@@ -66,20 +66,55 @@ export class DatesService {
         // In reality we might schedule something async, but here we just proceed to propose
       }
 
-      // Generate suggested date
-      const suggestedDate = this.suggestedDateRepo.create({
-        match,
-        location,
-        status: 'suggested',
-        scheduledStart: timeSlot ? timeSlot.start : undefined,
-        scheduledEnd: timeSlot ? timeSlot.end : undefined,
-      });
+      const createdDates: SuggestedDate[] = [];
+      for (const location of locations) {
+        // Generate suggested date
+        const suggestedDate = this.suggestedDateRepo.create({
+          match,
+          location,
+          status: 'suggested',
+          scheduledStart: timeSlot ? timeSlot.start : undefined,
+          scheduledEnd: timeSlot ? timeSlot.end : undefined,
+        });
+        createdDates.push(await this.suggestedDateRepo.save(suggestedDate));
+      }
 
-      return await this.suggestedDateRepo.save(suggestedDate);
+      return createdDates;
 
     } catch (error) {
-      this.logger.error(`Failed to suggest date for match ${match.matchId}`, error);
-      return null;
+      this.logger.error(`Failed to suggest dates for match ${match.matchId}`, error);
+      return [];
+    }
+  }
+
+  async refreshUserSuggestions(userId: number): Promise<void> {
+    // Find all active matches for user
+    const matches = await this.suggestedDateRepo.manager.getRepository(Match).find({
+      where: [
+        { user1Id: userId, status: 'active' },
+        { user2Id: userId, status: 'active' }
+      ]
+    });
+
+    for (const match of matches) {
+      // Find existing suggestions for this match
+      const existing = await this.suggestedDateRepo.find({
+        where: { match: { matchId: match.matchId } }
+      });
+
+      const declined = existing.filter(d => d.status === 'declined');
+      const keep = existing.filter(d => d.status !== 'declined');
+
+      // Delete the declined ones
+      for (const d of declined) {
+        await this.suggestedDateRepo.remove(d);
+      }
+
+      // Generate new ones to make up the deficit to 3
+      const numToGenerate = 3 - keep.length;
+      if (numToGenerate > 0) {
+        await this.suggestDatesForMatch(match, numToGenerate);
+      }
     }
   }
 
@@ -160,11 +195,9 @@ export class DatesService {
       const { promisify } = require('util');
       const path = require('path');
       const execAsync = promisify(exec);
-
-      const isDist = __dirname.includes('dist');
-      const baseDir = isDist ? path.join(__dirname, '..', '..') : path.join(__dirname, '..', '..', 'src');
-//get matched users availabilities (between 9 am and 10pm ;from today till 2 weeks from now)
-      const scriptPath = path.join(baseDir, 'PythonBackend', 'calendar_script.py');
+      const projectRoot = path.join(__dirname, '..', '..');
+      const scriptPath = path.join(projectRoot, 'src', 'PythonBackend', 'calendar_script.py');
+      //get matched users availabilities (between 9 am and 10pm ;from today till 2 weeks from now)
       const { stdout } = await execAsync(`python "${scriptPath}" suggest`, {
         env: {
           ...process.env,
@@ -205,10 +238,8 @@ export class DatesService {
       const path = require('path');
       const execAsync = promisify(exec);
 
-      const isDist = __dirname.includes('dist');
-      const baseDir = isDist ? path.join(__dirname, '..', '..') : path.join(__dirname, '..', '..', 'src');
-
-      const scriptPath = path.join(baseDir, 'PythonBackend', 'calendar_script.py');
+      const projectRoot = path.join(__dirname, '..', '..');
+      const scriptPath = path.join(projectRoot, 'src', 'PythonBackend', 'calendar_script.py');
       const { stdout } = await execAsync(`python "${scriptPath}" book "${start.toISOString()}" "${end.toISOString()}"`, {
         env: {
           ...process.env,

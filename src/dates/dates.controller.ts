@@ -29,4 +29,10 @@ export class DatesController {
     }
     return this.datesService.rejectDate(suggestionId, userId);
   }
+
+  @Post('user/:userId/refresh')
+  async refreshUserSuggestions(@Param('userId', ParseIntPipe) userId: number) {
+    await this.datesService.refreshUserSuggestions(userId);
+    return { success: true };
+  }
 }

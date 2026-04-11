@@ -20,7 +20,17 @@ export class InteractionsService {
       this.usersService.findOne(dto.senderId),
       this.usersService.findOne(dto.receiverId),
     ]);
-
+ // Idempotency guard: each user can only interact with a given candidate once
+    // per weekly batch. The DB has a UNIQUE KEY on (sender_id, receiver_id) as
+    // a safety net, but we enforce it here to return a clean 200 instead of a
+    // constraint-violation crash, and to avoid triggering the mutual-like check
+    // a second time on duplicate requests.
+    const existing = await this.interactionRepo.findOne({
+      where: { senderId: dto.senderId, receiverId: dto.receiverId },
+    });
+    if (existing) {
+      return { interaction: existing, match: null };
+    }
     const interaction = this.interactionRepo.create({
       sender,
       receiver,
@@ -30,6 +40,7 @@ export class InteractionsService {
     });
     await this.interactionRepo.save(interaction);
 
+    let match = null;
     if (dto.actionType === 'like') {
       const mutual = await this.interactionRepo.findOne({
         where: {
@@ -39,11 +50,11 @@ export class InteractionsService {
         },
       });
       if (mutual) {
-        await this.matchesService.createMutualMatch(dto.senderId, dto.receiverId);
+        match = await this.matchesService.createMutualMatch(dto.senderId, dto.receiverId);
       }
     }
 
-    return interaction;
+    // Return both so the client can show a match celebration when match !== null
+    return { interaction, match };
   }
 }
-

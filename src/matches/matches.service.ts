@@ -45,7 +45,7 @@ export class MatchesService {
     await this.convoRepo.save(conversation);
 
     // Trigger date scheduling suggestion
-    await this.datesService.suggestDateForMatch(saved);
+    await this.datesService.suggestDatesForMatch(saved);
 
     return saved;
   }
