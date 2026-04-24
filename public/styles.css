@@ -93,9 +93,44 @@
 }
 .form-row { display: flex; gap: 15px; }
 
-/* Page Toggling (Used inside Main App) */
-.page { display: none !important; width: 100%; flex-direction: column; }
-.page.active { display: flex !important; }
+/* ─────────────────────────────────────────
+   PAGE TRANSITIONS
+   Strategy:
+   • .page stays display:none until .active is added
+   • .page.active plays pageEnter (ease-in-out rise)
+   • .page-exiting is added by JS just before hiding;
+     it fades + nudges the outgoing page up before
+     JS removes .active and adds .hidden
+───────────────────────────────────────── */
+.page {
+  display: none !important;
+  width: 100%;
+  flex-direction: column;
+}
+
+.page.active {
+  display: flex !important;
+  animation: pageEnter 0.28s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+/* Applied by JS to the outgoing page before it is hidden */
+.page-exiting {
+  opacity: 0 !important;
+  transform: translateY(-6px) !important;
+  transition: opacity 0.18s ease, transform 0.18s ease !important;
+  pointer-events: none !important;
+}
+
+@keyframes pageEnter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 
 /* Utilities */
 .hidden { display: none !important; }

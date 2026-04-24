@@ -7,6 +7,24 @@ const API_BASE = 'http://localhost:3000';
 // guard, but this client-side map lets us update the UI instantly without
 // a round-trip and survive re-renders of the discover grid.
 const swipedThisSession = new Map();
+
+// ─────────────────────────────────────────
+// PAGE TRANSITION HELPER
+// Fades `outEl` out (0.18s), then runs `inFn` to swap the page.
+// If there is no outgoing element, inFn runs immediately.
+// ─────────────────────────────────────────
+function fadeThenSwitch(outEl, inFn, duration = 180) {
+  if (outEl) {
+    outEl.classList.add('page-exiting');
+    setTimeout(() => {
+      outEl.classList.remove('page-exiting');
+      inFn();
+    }, duration);
+  } else {
+    inFn();
+  }
+}
+
 // Initialize session if exists
 if (currentUserId) {
   // Execute immediately to prevent split-second flash of landing page
@@ -32,9 +50,18 @@ function logoutUser() {
   _knownMatchIds.clear();
   currentUserId = null;
   localStorage.removeItem('currentUserId');
-  document.getElementById('main-app').classList.add('hidden');
-  document.getElementById('page-landing').classList.remove('hidden');
-  document.getElementById('page-landing').classList.add('active');
+
+  const appEl = document.getElementById('main-app');
+  appEl.style.transition = 'opacity 0.2s ease';
+  appEl.style.opacity = '0';
+  setTimeout(() => {
+    appEl.style.transition = '';
+    appEl.style.opacity = '';
+    appEl.classList.add('hidden');
+    const landing = document.getElementById('page-landing');
+    landing.classList.remove('hidden');
+    landing.classList.add('active');
+  }, 200);
 }
 
 // Page navigation logic
@@ -44,31 +71,49 @@ document.querySelectorAll('.nav-item').forEach((btn) => {
     document.querySelectorAll('.nav-item:not(.logout)').forEach(b => b.classList.remove('active'));
     e.currentTarget.classList.add('active');
     const pageId = e.currentTarget.getAttribute('data-page');
-    document.querySelectorAll('main .page').forEach(p => p.classList.remove('active'));
+    const current = document.querySelector('main .page.active');
 
-    const targetPage = document.getElementById('page-' + pageId);
-    if (targetPage) targetPage.classList.add('active', 'flex');
-
-    if (pageId === 'discover') loadDiscover();
-    if (pageId === 'chats') loadChats();
-    if (pageId === 'calendar') loadDates();
+    fadeThenSwitch(current, () => {
+      document.querySelectorAll('main .page').forEach(p => p.classList.remove('active'));
+      const targetPage = document.getElementById('page-' + pageId);
+      if (targetPage) targetPage.classList.add('active', 'flex');
+      if (pageId === 'discover') loadDiscover();
+      if (pageId === 'chats') loadChats();
+      if (pageId === 'calendar') loadDates();
+    });
   });
 });
 
 function showMainApp() {
-  document.getElementById('page-landing').classList.remove('active');
-  document.getElementById('page-landing').classList.add('hidden');
-  document.getElementById('page-signup').classList.remove('active');
-  document.getElementById('page-signup').classList.add('hidden');
-  document.getElementById('main-app').classList.remove('hidden');
-  loadCurrentUser().then((isValid) => {
-    if (isValid === false) return; // session was invalid
-    loadPreferences().then(() => {
-      document.querySelector('[data-page="discover"]').click();
-    }).catch(() => {
-      document.querySelector('[data-page="discover"]').click();
+  const outLanding = document.getElementById('page-landing');
+  const outSignup  = document.getElementById('page-signup');
+  const activeOut  = outLanding.classList.contains('active') ? outLanding : outSignup;
+  const appEl      = document.getElementById('main-app');
+
+  fadeThenSwitch(activeOut, () => {
+    outLanding.classList.remove('active');
+    outLanding.classList.add('hidden');
+    outSignup.classList.remove('active', 'flex');
+    outSignup.classList.add('hidden');
+
+    // Fade the main app in from opacity 0
+    appEl.style.opacity = '0';
+    appEl.classList.remove('hidden');
+    requestAnimationFrame(() => {
+      appEl.style.transition = 'opacity 0.28s ease';
+      appEl.style.opacity = '1';
+      setTimeout(() => { appEl.style.transition = ''; }, 300);
     });
-    startMatchPolling(); // begin watching for incoming buzz-backs
+
+    loadCurrentUser().then((isValid) => {
+      if (isValid === false) return; // session was invalid
+      loadPreferences().then(() => {
+        document.querySelector('[data-page="discover"]').click();
+      }).catch(() => {
+        document.querySelector('[data-page="discover"]').click();
+      });
+      startMatchPolling(); // begin watching for incoming buzz-backs
+    });
   });
 }
 
@@ -201,15 +246,23 @@ window.sendMessageContent = async function () {
 
 function openAuthOverlay(mode) {
   if (mode === 'signup') {
-    document.getElementById('page-landing').classList.remove('active');
-    document.getElementById('page-landing').classList.add('hidden');
-    document.getElementById('page-signup').classList.remove('hidden');
-    document.getElementById('page-signup').classList.add('active', 'flex');
+    const out = document.getElementById('page-landing');
+    fadeThenSwitch(out, () => {
+      out.classList.remove('active');
+      out.classList.add('hidden');
+      const inp = document.getElementById('page-signup');
+      inp.classList.remove('hidden');
+      inp.classList.add('active', 'flex');
+    });
   } else {
-    document.getElementById('page-signup').classList.remove('active', 'flex');
-    document.getElementById('page-signup').classList.add('hidden');
-    document.getElementById('page-landing').classList.remove('hidden');
-    document.getElementById('page-landing').classList.add('active', 'flex');
+    const out = document.getElementById('page-signup');
+    fadeThenSwitch(out, () => {
+      out.classList.remove('active', 'flex');
+      out.classList.add('hidden');
+      const inp = document.getElementById('page-landing');
+      inp.classList.remove('hidden');
+      inp.classList.add('active', 'flex');
+    });
   }
 }
 
@@ -855,7 +908,7 @@ async function loadChats() {
       const escapedName = other.name.replace(/'/g, "\\'");
       const escapedImg = (other.profilePicUrl || '/assets/BeeProfileIcon.png').replace(/'/g, "\\'");
       return `
-        <div data-convid="${c.conversationId}" class="${isActive} rounded-xl p-4 flex gap-4 cursor-pointer mb-3 transition-colors" onclick="openChat(${c.conversationId}, '${escapedName}', '${escapedImg}', ${other.userId})">
+        <div data-convid="${c.conversationId}" class="chat-item ${isActive} rounded-xl p-4 flex gap-4 cursor-pointer transition-colors" onclick="openChat(${c.conversationId}, '${escapedName}', '${escapedImg}', ${other.userId})">
             <div class="w-14 h-14 hexagon-mask bg-outline-variant p-0.5 relative">
                 <img class="w-full h-full object-cover hexagon-mask" src="${other.profilePicUrl || '/assets/BeeProfileIcon.png'}">
             </div>
@@ -1379,9 +1432,6 @@ function renderConfirmedDates(confirmedDates) {
     const timeStr = formatTimeDisplay(d.scheduledStart);
     const locName = loc?.name || loc?.category || 'Somewhere fun';
 
-    // Only show feedback button if the date has already passed
-    const dateHasPassed = new Date(d.scheduledStart) < new Date();
-
     return `
     <div class="bg-surface-container-lowest hover:bg-surface-container-low p-4 rounded-xl transition-all group relative overflow-hidden shadow-sm border border-outline-variant/20">
         <div class="flex gap-4">
@@ -1397,12 +1447,8 @@ function renderConfirmedDates(confirmedDates) {
                 </div>
                 ${loc?.address ? `<p class="text-[10px] text-outline mt-1.5 truncate">${loc.address}</p>` : ''}
             </div>
-            <button
-              class="w-8 h-8 flex items-center justify-center rounded-full text-secondary hover:bg-surface-container-high transition-colors flex-shrink-0 ${dateHasPassed ? 'opacity-100 cursor-pointer' : 'opacity-0 pointer-events-none'}"
-              onclick="${dateHasPassed ? `openFeedbackModal(${d.suggestionId}, ${m.matchId}, ${other.userId}, '${other.name.replace(/'/g, "\\'")}')` : ''}"
-              title="${dateHasPassed ? 'Leave feedback' : 'Available after your date'}"
-            >
-                <span class="material-symbols-outlined text-[18px]">rate_review</span>
+            <button class="w-8 h-8 flex items-center justify-center rounded-full text-secondary hover:bg-surface-container-high transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0">
+                <span class="material-symbols-outlined text-[18px]">more_vert</span>
             </button>
         </div>
     </div>`;
@@ -1689,126 +1735,4 @@ window.goToMatchChat = function() {
   window.closeMatchModal();
   const btn = document.querySelector('[data-page="chats"]');
   if (btn) btn.click();
-};
-
-
-
-// =============================================
-// FEEDBACK MODULE
-// =============================================
-
-window.openFeedbackModal = async function(suggestionId, matchId, revieweeId, revieweeName) {
-  // Reset form state
-  window._feedbackState = {
-    suggestionId,
-    matchId,
-    revieweeId,
-    rating:      0,
-    placeRating: 0,
-    goAgain:     null,
-  };
-
-  // Check if already submitted
-  try {
-    const res = await fetch(`${API_BASE}/feedback/check/${suggestionId}/${currentUserId}`);
-    const data = await res.json();
-    if (data.submitted) {
-      alert('You already submitted feedback for this date!');
-      return;
-    }
-  } catch (e) {
-    console.error('Failed to check feedback status', e);
-  }
-
-  // Populate modal
-  const nameEl = document.getElementById('feedback-modal-name');
-  if (nameEl) nameEl.textContent = revieweeName;
-
-  // Reset stars
-  ['feedback-stars-rating', 'feedback-stars-place'].forEach(id => {
-    document.querySelectorAll(`#${id} span`).forEach(s => s.classList.remove('selected'));
-  });
-
-  // Reset go-again buttons
-  document.getElementById('feedback-go-yes')?.classList.remove('active');
-  document.getElementById('feedback-go-no')?.classList.remove('active');
-
-  // Reset comment
-  const commentEl = document.getElementById('feedback-comment');
-  if (commentEl) commentEl.value = '';
-
-  // Clear message
-  const msgEl = document.getElementById('feedback-message');
-  if (msgEl) { msgEl.textContent = ''; msgEl.className = ''; }
-
-  // Show modal
-  document.getElementById('feedback-modal')?.classList.remove('hidden');
-};
-
-window.closeFeedbackModal = function() {
-  document.getElementById('feedback-modal')?.classList.add('hidden');
-};
-
-window.setFeedbackStar = function(groupId, val) {
-  document.querySelectorAll(`#${groupId} span`).forEach(s => {
-    s.classList.toggle('selected', parseInt(s.dataset.val) <= val);
-  });
-  if (groupId === 'feedback-stars-rating') window._feedbackState.rating      = val;
-  if (groupId === 'feedback-stars-place')  window._feedbackState.placeRating = val;
-};
-
-window.setFeedbackGoAgain = function(val) {
-  window._feedbackState.goAgain = val;
-  document.getElementById('feedback-go-yes')?.classList.toggle('active',  val === true);
-  document.getElementById('feedback-go-no')?.classList.toggle('active',   val === false);
-};
-
-window.submitFeedback = async function() {
-  const state  = window._feedbackState;
-  const msgEl  = document.getElementById('feedback-message');
-
-  // Validation
-  if (!state.rating)            { msgEl.className = 'feedback-msg-error'; msgEl.textContent = 'Please rate the date.';  return; }
-  if (!state.placeRating)       { msgEl.className = 'feedback-msg-error'; msgEl.textContent = 'Please rate the place.'; return; }
-  if (state.goAgain === null)   { msgEl.className = 'feedback-msg-error'; msgEl.textContent = 'Please answer the "go again" question.'; return; }
-
-  const comment = document.getElementById('feedback-comment')?.value.trim();
-
-  const payload = {
-    suggestion_id: state.suggestionId,
-    match_id:     state.matchId,
-    reviewer_id:  Number(currentUserId),
-    reviewee_id:  state.revieweeId,
-    rating:       state.rating,
-    place_rating: state.placeRating,
-    go_again:     state.goAgain,
-    comment:      comment || undefined,
-  };
-
-  // Disable submit button
-  const btn = document.getElementById('feedback-submit-btn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Submitting...'; }
-
-  try {
-    const res  = await fetch(`${API_BASE}/feedback`, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(payload),
-    });
-    const data = await res.json();
-
-    if (res.ok) {
-      msgEl.className   = 'feedback-msg-success';
-      msgEl.textContent = '✅ Feedback submitted!';
-      setTimeout(() => closeFeedbackModal(), 1500);
-    } else {
-      msgEl.className   = 'feedback-msg-error';
-      msgEl.textContent = '❌ ' + (data.message || 'Something went wrong.');
-    }
-  } catch (e) {
-    msgEl.className   = 'feedback-msg-error';
-    msgEl.textContent = '❌ Network error. Please try again.';
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = 'Submit Feedback'; }
-  }
 };
