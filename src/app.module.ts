@@ -32,9 +32,9 @@ import { AppController } from './app.controller';
         type: 'mysql',
         host: process.env.DB_HOST || 'localhost',
         port: parseInt(process.env.DB_PORT || '3306', 10),
-        username: process.env.DB_USER || 'root',
+        username: process.env.DB_USERNAME || 'root',
         password: process.env.DB_PASSWORD || 'Mysqlpassword',
-        database: process.env.DB_NAME || 'BuzzMateDB',
+        database: process.env.DB_DATABASE || 'BuzzMateDB',
         legacySpatialSupport: false,
         entities: [
           User,
