@@ -78,7 +78,18 @@
   </section>
 
   <!-- ================= SIGN UP / ONBOARDING PAGE ================= -->
-  <section id="page-signup" class="page hidden bg-surface min-h-screen w-full overflow-hidden flex">
+  <section id="page-signup" class="page hidden bg-surface min-h-screen w-full overflow-hidden flex items-center justify-center">
+    <div class="fixed inset-0 opacity-10 pointer-events-none bg-surface-container-low">
+      <svg height="100%" width="100%" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <pattern height="100" id="honeycomb-signup-bg" patterntransform="scale(1.5)" patternunits="userSpaceOnUse" width="56" x="0" y="0">
+            <path d="M28 66L0 50L0 16L28 0L56 16L56 50L28 66L28 100" fill="none" stroke="#755700" stroke-width="1"></path>
+          </pattern>
+        </defs>
+        <rect fill="url(#honeycomb-signup-bg)" height="100%" width="100%"></rect>
+      </svg>
+    </div>
+
     <section class="hidden lg:flex lg:w-1/2 relative bg-surface-container-low items-center justify-center p-12 overflow-hidden">
       <!-- Background Honeycomb ... -->
       <div class="absolute inset-0 opacity-10 pointer-events-none">
@@ -87,6 +98,7 @@
           <rect fill="url(#honeycomb-signup)" height="100%" width="100%"></rect>
         </svg>
       </div>
+      
       <div class="relative z-10 flex flex-col items-center text-center max-w-lg">
         <h1 class="font-headline text-5xl font-black text-primary tracking-tight leading-tight mb-4 flex items-center justify-center"><span class="material-symbols-outlined mr-3 text-4xl align-middle" style="font-variation-settings: 'FILL' 1;">hive</span>BuzzMate</h1>
         <p class="text-secondary text-lg leading-relaxed px-8">matchmaking system</p>
@@ -96,12 +108,12 @@
     </section>
     
     <section class="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-12 md:p-16 bg-surface overflow-y-auto">
-      <div class="w-full max-w-xl">
+      <div class="w-full max-w-xl flex flex-col items-center justify-center">
         <div class="mb-10 text-center lg:text-left mt-8">
           <h2 class="font-headline text-3xl font-bold text-on-surface mb-2">Create Your Profile</h2>
           <p class="text-secondary">Already a member? <a class="text-primary font-bold hover:underline" href="#" onclick="openAuthOverlay('login'); return false;">Log in to your hive</a></p>
         </div>
-        
+        <div class="w-full bg-surface-container-lowest/40 backdrop-blur-xl p-8 rounded-xl space-y-8 shadow-[0_32px_64px_-12px_rgba(50,47,32,0.06)]">
         <form id="signup-form" onsubmit="event.preventDefault(); submitAuth('signup');" class="space-y-8 pb-12">
           
           <div class="space-y-6">
@@ -219,6 +231,7 @@
           </div>
           <p class="text-[10px] text-center text-outline uppercase tracking-widest font-bold"><br/></p>
         </form>
+        </div>
       </div>
     </section>
   </section>
