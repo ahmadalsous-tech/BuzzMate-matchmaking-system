@@ -1432,6 +1432,9 @@ function renderConfirmedDates(confirmedDates) {
     const timeStr = formatTimeDisplay(d.scheduledStart);
     const locName = loc?.name || loc?.category || 'Somewhere fun';
 
+    // Only show feedback button if the date has already passed
+    const dateHasPassed = new Date(d.scheduledStart) < new Date();
+
     return `
     <div class="bg-surface-container-lowest hover:bg-surface-container-low p-4 rounded-xl transition-all group relative overflow-hidden shadow-sm border border-outline-variant/20">
         <div class="flex gap-4">
@@ -1447,8 +1450,12 @@ function renderConfirmedDates(confirmedDates) {
                 </div>
                 ${loc?.address ? `<p class="text-[10px] text-outline mt-1.5 truncate">${loc.address}</p>` : ''}
             </div>
-            <button class="w-8 h-8 flex items-center justify-center rounded-full text-secondary hover:bg-surface-container-high transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0">
-                <span class="material-symbols-outlined text-[18px]">more_vert</span>
+            <button
+              class="w-8 h-8 flex items-center justify-center rounded-full text-secondary hover:bg-surface-container-high transition-colors flex-shrink-0 ${dateHasPassed ? 'opacity-100 cursor-pointer' : 'opacity-0 pointer-events-none'}"
+              onclick="${dateHasPassed ? `openFeedbackModal(${d.suggestionId}, ${m.matchId}, ${other.userId}, '${other.name.replace(/'/g, "\\'")}')` : ''}"
+              title="${dateHasPassed ? 'Leave feedback' : 'Available after your date'}"
+            >
+                <span class="material-symbols-outlined text-[18px]">rate_review</span>
             </button>
         </div>
     </div>`;
@@ -1735,4 +1742,115 @@ window.goToMatchChat = function() {
   window.closeMatchModal();
   const btn = document.querySelector('[data-page="chats"]');
   if (btn) btn.click();
+};
+
+
+// =============================================
+// FEEDBACK MODULE
+// =============================================
+
+window.openFeedbackModal = async function(suggestionId, matchId, revieweeId, revieweeName) {
+  window._feedbackState = {
+    suggestionId,
+    matchId,
+    revieweeId,
+    rating:      0,
+    placeRating: 0,
+    goAgain:     null,
+  };
+
+  try {
+    const res = await fetch(`${API_BASE}/feedback/check/${suggestionId}/${currentUserId}`);
+    const data = await res.json();
+    if (data.submitted) {
+      alert('You already submitted feedback for this date!');
+      return;
+    }
+  } catch (e) {
+    console.error('Failed to check feedback status', e);
+  }
+
+  const nameEl = document.getElementById('feedback-modal-name');
+  if (nameEl) nameEl.textContent = revieweeName;
+
+  ['feedback-stars-rating', 'feedback-stars-place'].forEach(id => {
+    document.querySelectorAll(`#${id} span`).forEach(s => s.classList.remove('selected'));
+  });
+
+  document.getElementById('feedback-go-yes')?.classList.remove('active');
+  document.getElementById('feedback-go-no')?.classList.remove('active');
+
+  const commentEl = document.getElementById('feedback-comment');
+  if (commentEl) commentEl.value = '';
+
+  const msgEl = document.getElementById('feedback-message');
+  if (msgEl) { msgEl.textContent = ''; msgEl.className = ''; }
+
+  document.getElementById('feedback-modal')?.classList.remove('hidden');
+};
+
+window.closeFeedbackModal = function() {
+  document.getElementById('feedback-modal')?.classList.add('hidden');
+};
+
+window.setFeedbackStar = function(groupId, val) {
+  document.querySelectorAll(`#${groupId} span`).forEach(s => {
+    s.classList.toggle('selected', parseInt(s.dataset.val) <= val);
+  });
+  if (groupId === 'feedback-stars-rating') window._feedbackState.rating      = val;
+  if (groupId === 'feedback-stars-place')  window._feedbackState.placeRating = val;
+};
+
+window.setFeedbackGoAgain = function(val) {
+  window._feedbackState.goAgain = val;
+  document.getElementById('feedback-go-yes')?.classList.toggle('active',  val === true);
+  document.getElementById('feedback-go-no')?.classList.toggle('active',   val === false);
+};
+
+window.submitFeedback = async function() {
+  const state  = window._feedbackState;
+  const msgEl  = document.getElementById('feedback-message');
+
+  if (!state.rating)            { msgEl.className = 'feedback-msg-error'; msgEl.textContent = 'Please rate the date.';  return; }
+  if (!state.placeRating)       { msgEl.className = 'feedback-msg-error'; msgEl.textContent = 'Please rate the place.'; return; }
+  if (state.goAgain === null)   { msgEl.className = 'feedback-msg-error'; msgEl.textContent = 'Please answer the "go again" question.'; return; }
+
+  const comment = document.getElementById('feedback-comment')?.value.trim();
+
+  const payload = {
+    suggestion_id: state.suggestionId,
+    match_id:      state.matchId,
+    reviewer_id:   Number(currentUserId),
+    reviewee_id:   state.revieweeId,
+    rating:        state.rating,
+    place_rating:  state.placeRating,
+    go_again:      state.goAgain,
+    comment:       comment || undefined,
+  };
+
+  const btn = document.getElementById('feedback-submit-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Submitting...'; }
+
+  try {
+    const res  = await fetch(`${API_BASE}/feedback`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(payload),
+    });
+    const data = await res.json();
+
+    if (res.ok) {
+      msgEl.className   = 'feedback-msg-success';
+      msgEl.textContent = '✅ Feedback submitted!';
+      setTimeout(() => closeFeedbackModal(), 1500);
+    } else {
+      msgEl.className   = 'feedback-msg-error';
+      msgEl.textContent = '❌ ' + (data.message || 'Something went wrong.');
+    }
+  } catch (e) {
+    msgEl.className   = 'feedback-msg-error';
+    msgEl.textContent = '❌ Network error. Please try again.';
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Submit Feedback'; }
+  }
 };
