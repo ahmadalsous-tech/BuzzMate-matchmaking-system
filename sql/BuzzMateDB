@@ -153,6 +153,7 @@ CREATE TABLE Messages (
 
 CREATE TABLE Date_Feedback (
   feedback_id     INT AUTO_INCREMENT PRIMARY KEY,
+  suggestion_id   INT NOT NULL,
   match_id        INT NOT NULL,
   reviewer_id     INT NOT NULL,
   reviewee_id     INT NOT NULL,
@@ -161,9 +162,9 @@ CREATE TABLE Date_Feedback (
   go_again        BOOLEAN NOT NULL,
   comment         TEXT,
   created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
-  UNIQUE KEY unique_review (match_id, reviewer_id),
-  FOREIGN KEY (match_id)    REFERENCES Matches(match_id)  ON DELETE CASCADE,
-  FOREIGN KEY (reviewer_id) REFERENCES Users(user_id)     ON DELETE CASCADE,
-  FOREIGN KEY (reviewee_id) REFERENCES Users(user_id)     ON DELETE CASCADE
+  UNIQUE KEY unique_review (suggestion_id, reviewer_id),
+  FOREIGN KEY (suggestion_id) REFERENCES Suggested_Dates(suggestion_id) ON DELETE CASCADE,
+  FOREIGN KEY (match_id)      REFERENCES Matches(match_id)               ON DELETE CASCADE,
+  FOREIGN KEY (reviewer_id)   REFERENCES Users(user_id)                  ON DELETE CASCADE,
+  FOREIGN KEY (reviewee_id)   REFERENCES Users(user_id)                  ON DELETE CASCADE
 );
