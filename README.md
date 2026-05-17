@@ -1,4 +1,18 @@
+
+
 ![logo-HINK5](https://github.com/user-attachments/assets/87780418-2f1e-4970-9609-5da54b4a89a3)
+
+<div align="center">
+  <h3>📺 Project Demo Video</h3>
+  <br>
+  <a href="https://youtu.be/-hZtNYION8M">
+    <img src="https://youtube.com" width="600" alt="Watch the video" style="border-radius: 8px;">
+  </a>
+  <br><br>
+  <a href="https://youtu.be/-hZtNYION8M">
+    <img src="https://shields.io▶-red?style=for-the-badge&logo=youtube&logoColor=white" alt="Watch Demo">
+  </a>
+</div>
 
 **System purpose (in-scope only):** a simple matchmaking app that supports:
 
